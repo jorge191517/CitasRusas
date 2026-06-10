@@ -70,6 +70,14 @@ export default function RegisterPage() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            firstName: firstName.trim(),
+            birthDate,
+            gender,
+            country: country.trim()
+          }
+        }
       });
 
       if (error) {
@@ -77,8 +85,11 @@ export default function RegisterPage() {
       }
 
       if (data?.user) {
-        // Set session token cookie for Route Checkers
-        document.cookie = `veloura-auth-session=${data.session?.access_token || "supabase-registered"}; path=/; SameSite=Lax; Secure`;
+        const token = data.session?.access_token;
+        if (token) {
+          // Set session token cookie for Route Checkers
+          document.cookie = `veloura-auth-session=${token}; path=/; SameSite=Lax; Secure`;
+        }
         
         // Build Profile payload. Since lastName and city are required in Prisma schema, we supply empty string fallbacks.
         const userObj = {
@@ -87,11 +98,11 @@ export default function RegisterPage() {
           role: "USER",
           profile: {
             firstName: firstName.trim(),
-            lastName: "", // Default empty string to satisfy database schema constraint
+            lastName: "",
             birthDate,
             gender,
             country: country.trim(),
-            city: "", // Default empty string to satisfy database schema constraint
+            city: "",
             languages: [currentLang],
             verifiedStatus: "UNVERIFIED"
           }
@@ -99,16 +110,26 @@ export default function RegisterPage() {
 
         localStorage.setItem("veloura_user", JSON.stringify(userObj));
         
-        // POST to backend API to write Profile record in Supabase PostgreSQL
+        // POST to backend API with Authorization Header
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json"
+        };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
         const apiRes = await fetch(`/api/profile`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify(userObj)
         });
 
         if (!apiRes.ok) {
           const apiErr = await apiRes.json();
-          throw new Error(apiErr.error || "Error al crear el perfil de usuario en la base de datos.");
+          // If the profile already exists (e.g. created by database trigger or previous attempt), ignore the error and proceed
+          if (!apiErr.error?.includes("already exists") && !apiErr.error?.includes("Unique constraint")) {
+            throw new Error(apiErr.error || "Error al crear el perfil de usuario en la base de datos.");
+          }
         }
 
         setSuccessMsg(t("auth.successRegister"));

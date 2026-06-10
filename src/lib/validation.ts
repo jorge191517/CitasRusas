@@ -3,7 +3,7 @@ import { z } from "zod";
 // 1. Profile Schema Validation
 export const profileSchema = z.object({
   firstName: z.string().min(2, "Name must be at least 2 characters").max(50),
-  lastName: z.string().min(2, "Last name must be at least 2 characters").max(50),
+  lastName: z.string().optional().default(""),
   birthDate: z.string().refine((val) => {
     const date = new Date(val);
     const today = new Date();
@@ -16,12 +16,12 @@ export const profileSchema = z.object({
   }, { message: "You must be at least 18 years old" }),
   gender: z.enum(["MALE", "FEMALE", "OTHER"]),
   country: z.string().min(2, "Country must be specified"),
-  city: z.string().min(2, "City must be specified"),
-  languages: z.array(z.string()).min(1, "Select at least one language"),
+  city: z.string().optional().default(""),
+  languages: z.array(z.string()).min(1, "Select at least one language").optional().default(["es"]),
   profession: z.string().max(100).optional().nullable(),
   maritalStatus: z.string().max(50).optional().nullable(),
   bio: z.string().max(500, "Bio cannot exceed 500 characters").optional().nullable(),
-  interests: z.array(z.string()).optional(),
+  interests: z.array(z.string()).optional().default([]),
   height: z.number().min(100).max(250).optional().nullable(),
   videoIntroUrl: z.string().url("Invalid video URL").optional().nullable().or(z.literal("")),
 });
@@ -48,5 +48,5 @@ export const uploadSchema = z.object({
   fileType: z.string().refine((val) => {
     return ["image/jpeg", "image/png", "image/webp", "video/mp4"].includes(val);
   }, { message: "Only Jpeg, Png, Webp images and Mp4 videos are allowed" }),
-  fileSize: z.number().max(10 * 1024 * 1024, "File size cannot exceed 10MB"), // 10MB limit
+  fileSize: z.number().max(10 * 1024 * 1024, "File size cannot exceed 10MB"),
 });

@@ -4,6 +4,6 @@
   "webDir": "out",
   "server": {
     "url": "https://citas-rusas-pr71.vercel.app/es",
-    "cleartext": true
+    "cleartext": false
   }
 }

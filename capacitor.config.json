@@ -1,13 +1,9 @@
 {
-  "appId": "com.veloura.app",
+  "appId": "com.veloura.citasrusas",
   "appName": "Veloura",
   "webDir": "out",
-  "bundledWebRuntime": false,
   "server": {
-    "androidScheme": "https",
-    "allowNavigation": [
-      "localhost:3000",
-      "*.supabase.co"
-    ]
+    "url": "https://citas-rusas-pr71.vercel.app/es",
+    "cleartext": true
   }
 }

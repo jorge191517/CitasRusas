@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Veloura</string>
+    <string name="title_activity_main">Veloura</string>
+    <string name="package_name">com.veloura.citasrusas</string>
+    <string name="custom_url_scheme">com.veloura.citasrusas</string>
+</resources>

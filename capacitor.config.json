@@ -1,0 +1,13 @@
+{
+  "appId": "com.veloura.app",
+  "appName": "Veloura",
+  "webDir": "out",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": [
+      "localhost:3000",
+      "*.supabase.co"
+    ]
+  }
+}

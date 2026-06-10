@@ -1,0 +1,198 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum SwipeType {
+  LIKE
+  DISLIKE
+  SUPER_LIKE
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum SubscriptionTier {
+  FREE
+  PREMIUM
+}
+
+model User {
+  id            String         @id @default(uuid()) // Maps to Supabase auth.users UUID
+  email         String         @unique
+  role          Role           @default(USER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  // Relations
+  profile       Profile?
+  photos        Photo[]
+  likesSent     Like[]         @relation("LikesSent")
+  likesReceived Like[]         @relation("LikesReceived")
+  matches       Match[]        @relation("MatchesAsUser1")
+  matchesAs2    Match[]        @relation("MatchesAsUser2")
+  messagesSent  Message[]      @relation("SentMessages")
+  conversations ConversationParticipant[]
+  reportsSent   Report[]       @relation("Reporter")
+  reportsReceived Report[]     @relation("ReportedUser")
+  verifications Verification[]
+  subscription  Subscription?
+}
+
+model Profile {
+  id             String         @id @default(uuid())
+  userId         String         @unique
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  firstName      String
+  lastName       String
+  birthDate      DateTime
+  gender         Gender
+  country        String
+  city           String
+  languages      String[]       // Array of spoken languages e.g., ["es", "en"]
+  profession     String?
+  maritalStatus  String?        // Single, Divorced, etc.
+  bio            String?
+  interests      String[]       // Array of interests e.g., ["Music", "Travel"]
+  height         Float?         // Height in cm
+  videoIntroUrl  String?        // Optional video presentation url
+  verifiedStatus VerificationStatus @default(UNVERIFIED)
+  
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model Photo {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url          String
+  isPrimary    Boolean  @default(false)
+  isApproved   Boolean  @default(true) // Moderation flag
+  createdAt    DateTime @default(now())
+  
+  @@index([userId])
+}
+
+model Like {
+  id         String    @id @default(uuid())
+  senderId   String
+  sender     User      @relation("LikesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User      @relation("LikesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+  type       SwipeType @default(LIKE)
+  createdAt  DateTime  @default(now())
+
+  @@unique([senderId, receiverId])
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+model Match {
+  id             String        @id @default(uuid())
+  user1Id        String
+  user1          User          @relation("MatchesAsUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2Id        String
+  user2          User          @relation("MatchesAsUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  conversationId String?       @unique
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+}
+
+model Conversation {
+  id           String                    @id @default(uuid())
+  createdAt    DateTime                  @default(now())
+  participants ConversationParticipant[]
+  messages     Message[]
+  match        Match?
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  text           String?
+  photoUrl       String?
+  audioUrl       String?
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+}
+
+model Report {
+  id             String       @id @default(uuid())
+  reporterId     String
+  reporter       User         @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUserId String
+  reportedUser   User         @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  reason         String
+  details        String?
+  status         ReportStatus @default(PENDING)
+  createdAt      DateTime     @default(now())
+}
+
+model Verification {
+  id           String             @id @default(uuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentUrl  String
+  selfieUrl    String
+  status       VerificationStatus @default(PENDING)
+  createdAt    DateTime           @default(now())
+}
+
+model Subscription {
+  id         String           @id @default(uuid())
+  userId     String           @unique
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier       SubscriptionTier @default(FREE)
+  stripeId   String?          @unique // Stripe customer or subscription ID
+  isActive   Boolean          @default(true)
+  expiresAt  DateTime?
+}

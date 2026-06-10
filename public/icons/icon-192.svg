@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="192" height="192">
+  <rect width="512" height="512" rx="128" fill="#0A1128" />
+  <!-- Double heart face silhouette concept in Rose Gold (#D4A373) -->
+  <path d="M256,120 C230,80 180,80 150,110 C120,140 120,190 150,220 L256,330 L362,220 C392,190 392,140 362,110 C332,80 282,80 256,120 Z" fill="none" stroke="#D4A373" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M256,170 C240,140 200,140 180,160 C160,180 160,210 180,230 L256,305 L332,230 C352,210 352,180 332,160 C312,140 272,140 256,170 Z" fill="none" stroke="#FF6B8B" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Decorative stars/sparkles in gold -->
+  <path d="M110,140 L115,130 L120,140 L130,145 L120,150 L115,160 L110,150 L100,145 Z" fill="#D4A373" />
+  <path d="M390,140 L395,130 L400,140 L410,145 L400,150 L395,160 L390,150 L380,145 Z" fill="#D4A373" />
+</svg>

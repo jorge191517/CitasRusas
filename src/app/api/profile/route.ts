@@ -169,8 +169,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Missing user identity" }, { status: 400 });
     }
 
-    // Validate updated Profile via Zod
-    const profileValidation = profileSchema.safeParse(body.profile || body);
+    // Validate updated Profile via Zod partial schema
+    const profileValidation = profileSchema.partial().safeParse(body.profile || body);
     if (!profileValidation.success) {
       return NextResponse.json({ error: profileValidation.error.format() }, { status: 400 });
     }
@@ -183,7 +183,7 @@ export async function PATCH(req: NextRequest) {
         data: {
           firstName: validProfile.firstName,
           lastName: validProfile.lastName,
-          birthDate: new Date(validProfile.birthDate),
+          birthDate: validProfile.birthDate ? new Date(validProfile.birthDate) : undefined,
           gender: validProfile.gender,
           country: validProfile.country,
           city: validProfile.city,

@@ -252,25 +252,25 @@ export default function OnboardingPage() {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch("/api/profile", {
+      const response = await fetch("/api/profile", {
         method: "PATCH",
         headers,
         body: JSON.stringify(profilePayload),
       });
+      const resData = await response.json();
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "No se pudo guardar el perfil en el servidor.");
+      if (!response.ok) {
+        let errMsg = "No se pudo guardar el perfil en el servidor.";
+        if (resData && resData.error) {
+          if (typeof resData.error === "string") {
+            errMsg = resData.error;
+          } else {
+            errMsg = JSON.stringify(resData.error);
+          }
+        }
+        throw new Error(errMsg);
       }
 
-      const resData = await res.json();
-      const completed = resData?.profile?.profileCompleted === true;
-
-      if (process.env.NODE_ENV === "development") {
-        console.log("VELOURA DEV: profileCompleted value after onboarding save:", completed);
-      }
-
-      // Update localStorage — mark profileCompleted true
       const stored = localStorage.getItem("veloura_user");
       if (stored) {
         const u = JSON.parse(stored);

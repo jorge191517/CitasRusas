@@ -178,31 +178,66 @@ export async function PATCH(req: NextRequest) {
     const validProfile = profileValidation.data;
 
     try {
-      const updatedProfile = await prisma.profile.update({
+      // Ensure the User row exists before upserting the Profile
+      const activeEmail = authUser?.email || body.email || "";
+      await prisma.user.upsert({
+        where: { id: activeUserId },
+        update: {},
+        create: {
+          id: activeUserId,
+          email: activeEmail,
+          role: "USER",
+        },
+      });
+
+      // Use upsert so PATCH works even when no Profile row exists yet
+      const updatedProfile = await prisma.profile.upsert({
         where: { userId: activeUserId },
-        data: {
-          firstName: validProfile.firstName,
-          lastName: validProfile.lastName,
-          birthDate: validProfile.birthDate ? new Date(validProfile.birthDate) : undefined,
-          gender: validProfile.gender,
-          country: validProfile.country,
-          city: validProfile.city,
-          languages: validProfile.languages,
+        update: {
+          ...(validProfile.firstName !== undefined && { firstName: validProfile.firstName }),
+          ...(validProfile.lastName !== undefined && { lastName: validProfile.lastName }),
+          ...(validProfile.birthDate !== undefined && { birthDate: new Date(validProfile.birthDate) }),
+          ...(validProfile.gender !== undefined && { gender: validProfile.gender }),
+          ...(validProfile.country !== undefined && { country: validProfile.country }),
+          ...(validProfile.city !== undefined && { city: validProfile.city }),
+          ...(validProfile.languages !== undefined && { languages: validProfile.languages }),
+          ...(validProfile.profession !== undefined && { profession: validProfile.profession }),
+          ...(validProfile.maritalStatus !== undefined && { maritalStatus: validProfile.maritalStatus }),
+          ...(validProfile.bio !== undefined && { bio: validProfile.bio }),
+          ...(validProfile.interests !== undefined && { interests: validProfile.interests }),
+          ...(validProfile.hobbies !== undefined && { hobbies: validProfile.hobbies }),
+          ...(validProfile.lookingFor !== undefined && { lookingFor: validProfile.lookingFor }),
+          ...(validProfile.mainPhotoUrl !== undefined && { mainPhotoUrl: validProfile.mainPhotoUrl }),
+          ...(validProfile.profileCompleted !== undefined && { profileCompleted: validProfile.profileCompleted }),
+          ...(validProfile.height !== undefined && { height: validProfile.height }),
+          ...(validProfile.videoIntroUrl !== undefined && { videoIntroUrl: validProfile.videoIntroUrl }),
+        },
+        create: {
+          userId: activeUserId,
+          // Required fields — use provided values or safe defaults
+          firstName: validProfile.firstName || "",
+          lastName: validProfile.lastName || "",
+          birthDate: validProfile.birthDate ? new Date(validProfile.birthDate) : new Date("2000-01-01"),
+          gender: validProfile.gender || "OTHER",
+          country: validProfile.country || "",
+          city: validProfile.city || "",
+          languages: validProfile.languages || [],
+          interests: validProfile.interests || [],
+          hobbies: validProfile.hobbies || [],
+          // Optional fields
           profession: validProfile.profession,
           maritalStatus: validProfile.maritalStatus,
           bio: validProfile.bio,
-          interests: validProfile.interests,
-          hobbies: validProfile.hobbies,
           lookingFor: validProfile.lookingFor,
           mainPhotoUrl: validProfile.mainPhotoUrl,
-          profileCompleted: validProfile.profileCompleted,
+          profileCompleted: validProfile.profileCompleted ?? false,
           height: validProfile.height,
           videoIntroUrl: validProfile.videoIntroUrl,
-        }
+        },
       });
       return NextResponse.json({ success: true, profile: updatedProfile });
     } catch (dbErr: any) {
-      console.error("Prisma profile update error:", dbErr.message);
+      console.error("Prisma profile upsert error:", dbErr.message);
       if (isDevelopment) {
         return NextResponse.json({ success: true, mockMode: true, profile: body.profile || body });
       }

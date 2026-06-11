@@ -178,21 +178,40 @@ export async function PATCH(req: NextRequest) {
     const validProfile = profileValidation.data;
 
     try {
-      // Ensure the User row exists before upserting the Profile
       const activeEmail = authUser?.email || body.email || "";
-      await prisma.user.upsert({
-        where: { id: activeUserId },
-        update: {},
-        create: {
-          id: activeUserId,
-          email: activeEmail,
-          role: "USER",
-        },
-      });
 
-      // Use upsert so PATCH works even when no Profile row exists yet
+      // ── Step 1: Resolve the canonical userId for the Profile ──────────────
+      // Priority: Supabase Auth ID > existing User by email
+      let resolvedUserId = activeUserId;
+
+      // Check if User already exists by Supabase ID
+      const userById = await prisma.user.findUnique({ where: { id: activeUserId } });
+
+      if (!userById) {
+        // User doesn't exist by Supabase ID — check by email
+        const userByEmail = await prisma.user.findUnique({ where: { email: activeEmail } });
+
+        if (userByEmail) {
+          // A User with this email exists but with a different ID.
+          // Use that user's ID for the profile (the profile is tied to the DB user).
+          resolvedUserId = userByEmail.id;
+          console.warn(`User ID mismatch: Supabase=${activeUserId}, DB=${userByEmail.id}. Using DB id for profile.`);
+        } else {
+          // No user found at all — create one with the Supabase ID
+          await prisma.user.create({
+            data: {
+              id: activeUserId,
+              email: activeEmail,
+              role: "USER",
+            },
+          });
+        }
+      }
+      // If userById exists, resolvedUserId is already correct
+
+      // ── Step 2: Upsert Profile using resolvedUserId ───────────────────────
       const updatedProfile = await prisma.profile.upsert({
-        where: { userId: activeUserId },
+        where: { userId: resolvedUserId },
         update: {
           ...(validProfile.firstName !== undefined && { firstName: validProfile.firstName }),
           ...(validProfile.lastName !== undefined && { lastName: validProfile.lastName }),
@@ -213,7 +232,7 @@ export async function PATCH(req: NextRequest) {
           ...(validProfile.videoIntroUrl !== undefined && { videoIntroUrl: validProfile.videoIntroUrl }),
         },
         create: {
-          userId: activeUserId,
+          userId: resolvedUserId,
           // Required fields — use provided values or safe defaults
           firstName: validProfile.firstName || "",
           lastName: validProfile.lastName || "",

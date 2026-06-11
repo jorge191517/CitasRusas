@@ -31,6 +31,33 @@ async function getAuthenticatedUser(req: NextRequest) {
   }
 }
 
+// GET: Fetch profile info for the logged in user
+export async function GET(req: NextRequest) {
+  try {
+    const authUser = await getAuthenticatedUser(req);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized access: Session invalid" }, { status: 401 });
+    }
+
+    const dbUser = await prisma.user.findUnique({
+      where: { id: authUser.id },
+      include: { profile: true }
+    });
+
+    if (!dbUser) {
+      return NextResponse.json({ error: "User not found in database" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      role: dbUser.role,
+      profile: dbUser.profile
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
 // POST: Register profile info
 export async function POST(req: NextRequest) {
   try {
@@ -82,6 +109,11 @@ export async function POST(req: NextRequest) {
           profession: validProfile.profession,
           maritalStatus: validProfile.maritalStatus,
           bio: validProfile.bio,
+          interests: validProfile.interests,
+          hobbies: validProfile.hobbies,
+          lookingFor: validProfile.lookingFor,
+          mainPhotoUrl: validProfile.mainPhotoUrl,
+          profileCompleted: validProfile.profileCompleted,
           height: validProfile.height,
           videoIntroUrl: validProfile.videoIntroUrl,
         },
@@ -97,6 +129,11 @@ export async function POST(req: NextRequest) {
           profession: validProfile.profession,
           maritalStatus: validProfile.maritalStatus,
           bio: validProfile.bio,
+          interests: validProfile.interests,
+          hobbies: validProfile.hobbies,
+          lookingFor: validProfile.lookingFor,
+          mainPhotoUrl: validProfile.mainPhotoUrl,
+          profileCompleted: validProfile.profileCompleted,
           height: validProfile.height,
           videoIntroUrl: validProfile.videoIntroUrl,
         }
@@ -133,7 +170,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // Validate updated Profile via Zod
-    const profileValidation = profileSchema.safeParse(body.profile);
+    const profileValidation = profileSchema.safeParse(body.profile || body);
     if (!profileValidation.success) {
       return NextResponse.json({ error: profileValidation.error.format() }, { status: 400 });
     }
@@ -154,6 +191,11 @@ export async function PATCH(req: NextRequest) {
           profession: validProfile.profession,
           maritalStatus: validProfile.maritalStatus,
           bio: validProfile.bio,
+          interests: validProfile.interests,
+          hobbies: validProfile.hobbies,
+          lookingFor: validProfile.lookingFor,
+          mainPhotoUrl: validProfile.mainPhotoUrl,
+          profileCompleted: validProfile.profileCompleted,
           height: validProfile.height,
           videoIntroUrl: validProfile.videoIntroUrl,
         }
@@ -162,7 +204,7 @@ export async function PATCH(req: NextRequest) {
     } catch (dbErr: any) {
       console.error("Prisma profile update error:", dbErr.message);
       if (isDevelopment) {
-        return NextResponse.json({ success: true, mockMode: true, profile: body.profile });
+        return NextResponse.json({ success: true, mockMode: true, profile: body.profile || body });
       }
       return NextResponse.json({ error: `Database update failed: ${dbErr.message}` }, { status: 500 });
     }

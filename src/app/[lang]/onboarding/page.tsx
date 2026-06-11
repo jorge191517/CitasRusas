@@ -246,6 +246,30 @@ export default function OnboardingPage() {
         photos: [mainPhotoUrl, ...galleryUrls].filter(Boolean),
       };
 
+      // PATCH API (Mandatory)
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(profilePayload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "No se pudo guardar el perfil en el servidor.");
+      }
+
+      const resData = await res.json();
+      const completed = resData?.profile?.profileCompleted === true;
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("VELOURA DEV: profileCompleted value after onboarding save:", completed);
+      }
+
       // Update localStorage — mark profileCompleted true
       const stored = localStorage.getItem("veloura_user");
       if (stored) {
@@ -254,27 +278,15 @@ export default function OnboardingPage() {
           ...u,
           profile: {
             ...(u.profile || {}),
-            ...profilePayload,
+            ...(resData?.profile || {}),
             profileCompleted: true,
           }
         };
         localStorage.setItem("veloura_user", JSON.stringify(updated));
       }
 
-      // PATCH API (optional — may fail gracefully)
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-
-      await fetch("/api/profile", {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify(profilePayload),
-      }).catch(err => console.warn("Profile PATCH skipped:", err));
-
-      // ✅ Redirect to DASHBOARD (not landing)
-      window.location.href = `/${currentLang}/dashboard`;
+      // ✅ Redirect to DASHBOARD using replace
+      window.location.replace(`/${currentLang}/dashboard`);
     } catch (err: any) {
       console.error("Onboarding finish error:", err);
       setError(err.message || "Error al guardar el perfil.");

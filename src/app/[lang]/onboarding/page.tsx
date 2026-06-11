@@ -33,6 +33,7 @@ export default function OnboardingPage() {
   const galleryRef = useRef<HTMLInputElement>(null);
 
   // Step 2 — Datos personales
+  const [firstName, setFirstName] = useState("");
   const [gender, setGender] = useState("FEMALE");
   const [country, setCountry] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -76,6 +77,10 @@ export default function OnboardingPage() {
           profile: null as any,
         };
 
+        // Derive a firstName from email if not yet set
+        const emailName = (session.user.email || "").split("@")[0].replace(/[._-]/g, " ").trim();
+        const defaultName = emailName.length >= 2 ? emailName : "Usuario";
+
         // Try to prefill from localStorage cache (secondary)
         try {
           const stored = localStorage.getItem("veloura_user");
@@ -83,12 +88,19 @@ export default function OnboardingPage() {
             const cached = JSON.parse(stored);
             if (cached.id === session.user.id && cached.profile) {
               sessionUser.profile = cached.profile;
+              setFirstName(cached.profile.firstName || defaultName);
               setGender(cached.profile.gender || "FEMALE");
               setCountry(cached.profile.country || "");
               setBirthDate(cached.profile.birthDate || "");
+            } else {
+              setFirstName(defaultName);
             }
+          } else {
+            setFirstName(defaultName);
           }
-        } catch (_) {}
+        } catch (_) {
+          setFirstName(defaultName);
+        }
 
         setCurrentUser(sessionUser);
       } catch (err) {
@@ -260,8 +272,13 @@ export default function OnboardingPage() {
       }
 
       // Build profile payload
+      // firstName is required by Zod schema (min 2 chars)
+      const safeFirstName = firstName.trim().length >= 2 ? firstName.trim() : (currentUser?.email || "").split("@")[0].replace(/[._-]/g, " ").trim() || "Usuario";
+
       const profilePayload = {
         userId,
+        firstName: safeFirstName,
+        lastName: "",
         gender,
         country: country.trim(),
         birthDate,
@@ -269,12 +286,17 @@ export default function OnboardingPage() {
         hobbies,
         lookingFor,
         bio: bio.trim(),
-        languages,
+        languages: languages.length > 0 ? languages : ["es"],
         mainPhotoUrl,
         videoIntroUrl: videoUrl || undefined,
         profileCompleted: true,  // ← Mark as completed
         photos: [mainPhotoUrl, ...galleryUrls].filter(Boolean),
       };
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("[ONBOARDING] PATCH payload profileCompleted:", profilePayload.profileCompleted);
+        console.log("[ONBOARDING] PATCH payload mainPhotoUrl:", profilePayload.mainPhotoUrl);
+      }
 
       // PATCH API (Mandatory)
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -286,6 +308,11 @@ export default function OnboardingPage() {
         body: JSON.stringify(profilePayload),
       });
       const resData = await response.json();
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("[ONBOARDING] PATCH response profileCompleted:", resData?.profile?.profileCompleted);
+        console.log("[ONBOARDING] PATCH response mainPhotoUrl:", resData?.profile?.mainPhotoUrl);
+      }
 
       if (!response.ok) {
         let errMsg = "No se pudo guardar el perfil en el servidor.";
@@ -299,19 +326,25 @@ export default function OnboardingPage() {
         throw new Error(errMsg);
       }
 
-      const stored = localStorage.getItem("veloura_user");
-      if (stored) {
-        const u = JSON.parse(stored);
+      // Verify profileCompleted was actually saved
+      if (resData?.profile?.profileCompleted !== true) {
+        throw new Error("El perfil no se marcó como completado en el servidor. Inténtalo de nuevo.");
+      }
+
+      // Update localStorage cache with real data from server response
+      try {
+        const stored = localStorage.getItem("veloura_user");
+        const base = stored ? JSON.parse(stored) : { id: userId, email: currentUser?.email };
         const updated = {
-          ...u,
+          ...base,
           profile: {
-            ...(u.profile || {}),
+            ...(base.profile || {}),
             ...(resData?.profile || {}),
             profileCompleted: true,
           }
         };
         localStorage.setItem("veloura_user", JSON.stringify(updated));
-      }
+      } catch (_) {}
 
       // ✅ Redirect to DASHBOARD using replace
       window.location.replace(`/${currentLang}/dashboard`);

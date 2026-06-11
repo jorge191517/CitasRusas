@@ -32,21 +32,83 @@ export default function ProfilePage() {
   const photoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem("veloura_user");
-    if (!stored) { window.location.href = `/${currentLang}/login`; return; }
-    const u = JSON.parse(stored);
-    setCurrentUser(u);
-    const p = u.profile || {};
-    setFirstName(p.firstName || "");
-    setBio(p.bio || "");
-    setCountry(p.country || "");
-    setProfession(p.profession || "");
-    setInterests(p.interests || []);
-    setHobbies(p.hobbies || []);
-    setLookingFor(p.lookingFor || "");
-    setMainPhotoUrl(p.mainPhotoUrl || "");
-    setPhotos(p.photos || []);
-    setMatchCount(JSON.parse(localStorage.getItem("veloura_matches") || "[]").length);
+    const loadProfile = async () => {
+      try {
+        // 1. Check real Supabase session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          window.location.replace(`/${currentLang}/login`);
+          return;
+        }
+
+        // 2. Prefill from localStorage cache while API loads
+        const stored = localStorage.getItem("veloura_user");
+        if (stored) {
+          try {
+            const u = JSON.parse(stored);
+            setCurrentUser(u);
+            const p = u.profile || {};
+            setFirstName(p.firstName || "");
+            setBio(p.bio || "");
+            setCountry(p.country || "");
+            setProfession(p.profession || "");
+            setInterests(p.interests || []);
+            setHobbies(p.hobbies || []);
+            setLookingFor(p.lookingFor || "");
+            setMainPhotoUrl(p.mainPhotoUrl || "");
+            setPhotos(p.photos || []);
+          } catch (_) {}
+        }
+
+        // 3. Fetch real data from API
+        try {
+          const res = await fetch("/api/profile", {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            cache: "no-store",
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const p = data.profile || {};
+
+            if (process.env.NODE_ENV === "development") {
+              console.log("[PROFILE] API response profileCompleted:", p.profileCompleted);
+              console.log("[PROFILE] API response mainPhotoUrl:", p.mainPhotoUrl);
+            }
+
+            const userObj = {
+              id: session.user.id,
+              email: session.user.email,
+              role: data.role || "USER",
+              profile: p,
+            };
+            setCurrentUser(userObj);
+            setFirstName(p.firstName || "");
+            setBio(p.bio || "");
+            setCountry(p.country || "");
+            setProfession(p.profession || "");
+            setInterests(p.interests || []);
+            setHobbies(p.hobbies || []);
+            setLookingFor(p.lookingFor || "");
+            setMainPhotoUrl(p.mainPhotoUrl || "");
+            setPhotos(p.photos || []);
+
+            // Update localStorage cache with real API data
+            try {
+              localStorage.setItem("veloura_user", JSON.stringify(userObj));
+            } catch (_) {}
+          }
+        } catch (apiErr) {
+          console.error("Profile API fetch error:", apiErr);
+          // Keep localStorage data as fallback
+        }
+
+        setMatchCount(JSON.parse(localStorage.getItem("veloura_matches") || "[]").length);
+      } catch (err) {
+        console.error("Profile load error:", err);
+        window.location.replace(`/${currentLang}/login`);
+      }
+    };
+    loadProfile();
   }, [currentLang]);
 
   const calcAge = (birthDate?: string) => {
@@ -119,7 +181,12 @@ export default function ProfilePage() {
         <div className="relative w-full rounded-[28px] overflow-hidden border border-white/10 shadow-2xl bg-[#0D1530]" style={{ minHeight: "280px" }}>
           {/* Photo background */}
           {mainPhotoUrl ? (
-            <img src={mainPhotoUrl} alt={firstName} className="absolute inset-0 w-full h-full object-cover" />
+            <img
+              src={mainPhotoUrl}
+              alt={firstName}
+              className="absolute inset-0 w-full h-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#151F3C] to-[#0A1128]">
               <svg viewBox="0 0 100 100" className="w-24 h-24 text-primary/20">
@@ -174,7 +241,16 @@ export default function ProfilePage() {
             <div className="grid grid-cols-3 gap-2">
               {mainPhotoUrl && (
                 <div className="relative aspect-square rounded-2xl overflow-hidden border-2 border-primary/40">
-                  <img src={mainPhotoUrl} alt="Main" className="w-full h-full object-cover" />
+                  <img
+                    src={mainPhotoUrl}
+                    alt="Main"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const el = e.target as HTMLImageElement;
+                      el.style.display = "none";
+                      el.parentElement!.style.background = "linear-gradient(135deg, #151F3C, #0A1128)";
+                    }}
+                  />
                   <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-primary/80 rounded text-[8px] font-bold text-background">MAIN</div>
                 </div>
               )}

@@ -53,6 +53,10 @@ export async function getPostLoginRedirect(lang: string): Promise<AuthRouteResul
       if (res.ok) {
         profileData = await res.json();
         profileCompleted = profileData?.profile?.profileCompleted === true;
+        if (process.env.NODE_ENV === "development") {
+          console.log("[AUTH-ROUTING] profileCompleted from API:", profileCompleted);
+          console.log("[AUTH-ROUTING] mainPhotoUrl from API:", profileData?.profile?.mainPhotoUrl);
+        }
       }
     } catch (_) {
       // Network error — assume not completed

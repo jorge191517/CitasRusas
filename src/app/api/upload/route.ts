@@ -41,11 +41,12 @@ export async function POST(req: NextRequest) {
 
     try {
       const supabaseServer = await createClient();
-      // Bucket names requested: 'profile-photos'
+      // Unified bucket: 'profile-media' (matches onboarding client uploads)
+      const BUCKET = "profile-media";
       const fileName = `${activeUserId}/${Date.now()}_${file.name}`;
       
       const { data, error } = await supabaseServer.storage
-        .from("profile-photos")
+        .from(BUCKET)
         .upload(fileName, file, {
           cacheControl: "3600",
           upsert: false
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
 
       // Get public url
       const { data: publicUrlData } = supabaseServer.storage
-        .from("profile-photos")
+        .from(BUCKET)
         .getPublicUrl(fileName);
 
       return NextResponse.json({ success: true, url: publicUrlData.publicUrl });

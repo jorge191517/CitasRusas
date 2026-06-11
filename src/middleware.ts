@@ -81,7 +81,7 @@ export async function middleware(request: NextRequest) {
   // Route categories
   const isLandingPage = pathname === `/${currentLocale}`;
   const isAuthRoute = pathname.includes("/login") || pathname.includes("/register");
-  const isAuthRedirect = pathname.includes("/auth-redirect"); // APK entry — always allow
+  const isAuthRedirect = pathname.includes("/auth-redirect") || pathname.includes("/debug-auth"); // APK entry + debug — always allow
   const isProtectedRoute =
     pathname.includes("/dashboard") ||
     pathname.includes("/profile") ||

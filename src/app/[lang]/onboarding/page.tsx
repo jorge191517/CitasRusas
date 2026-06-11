@@ -60,20 +60,43 @@ export default function OnboardingPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem("veloura_user");
-    if (!stored) {
-      window.location.href = `/${currentLang}/login`;
-      return;
-    }
-    const u = JSON.parse(stored);
-    setCurrentUser(u);
+    const initAuth = async () => {
+      try {
+        // SOURCE OF TRUTH: Supabase Auth session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          window.location.replace(`/${currentLang}/login`);
+          return;
+        }
 
-    // Pre-fill from stored profile if available
-    if (u.profile) {
-      setGender(u.profile.gender || "FEMALE");
-      setCountry(u.profile.country || "");
-      setBirthDate(u.profile.birthDate || "");
-    }
+        // Build user object from session
+        const sessionUser = {
+          id: session.user.id,
+          email: session.user.email,
+          profile: null as any,
+        };
+
+        // Try to prefill from localStorage cache (secondary)
+        try {
+          const stored = localStorage.getItem("veloura_user");
+          if (stored) {
+            const cached = JSON.parse(stored);
+            if (cached.id === session.user.id && cached.profile) {
+              sessionUser.profile = cached.profile;
+              setGender(cached.profile.gender || "FEMALE");
+              setCountry(cached.profile.country || "");
+              setBirthDate(cached.profile.birthDate || "");
+            }
+          }
+        } catch (_) {}
+
+        setCurrentUser(sessionUser);
+      } catch (err) {
+        console.error("Onboarding auth error:", err);
+        window.location.replace(`/${currentLang}/login`);
+      }
+    };
+    initAuth();
   }, [currentLang]);
 
   // ─── STEP 1: Foto principal ───────────────────────────────────
@@ -210,8 +233,15 @@ export default function OnboardingPage() {
     setError("");
 
     try {
-      const userId = currentUser?.id;
+      // Always get userId + token from real Supabase session, not from state
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      if (!authSession) {
+        window.location.replace(`/${currentLang}/login`);
+        return;
+      }
+      const userId = authSession.user.id;
       if (!userId) throw new Error("Usuario no autenticado.");
+      const authToken = authSession.access_token;
 
       // Upload main photo
       const mainPhotoUrl = await uploadFile(mainPhoto, `${userId}/main_${Date.now()}`);
@@ -247,10 +277,8 @@ export default function OnboardingPage() {
       };
 
       // PATCH API (Mandatory)
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
       const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
 
       const response = await fetch("/api/profile", {
         method: "PATCH",
@@ -657,7 +685,7 @@ export default function OnboardingPage() {
           <p className="text-center">
             <button
               type="button"
-              onClick={() => window.location.href = `/${currentLang}/dashboard`}
+              onClick={() => window.location.replace(`/${currentLang}/dashboard`)}
               className="text-xs text-muted hover:text-white underline transition"
             >
               {currentLang === "es" ? "Saltar y entrar a la app →" : "Skip and enter the app →"}

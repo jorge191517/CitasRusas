@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase/client";
 import { Locale, getTranslation } from "../../../lib/i18n";
+import { getPostLoginRedirect } from "../../../lib/auth-routing";
 
 export default function LoginPage() {
   const params = useParams();
@@ -15,42 +16,21 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
 
-  // Check active session on load
+  // ── Check active session on mount — NO autofocus, no immediate keyboard ──
   React.useEffect(() => {
     const checkSession = async () => {
       try {
+        // Small delay so Supabase can restore session from storage
+        await new Promise((r) => setTimeout(r, 200));
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          if (process.env.NODE_ENV === "development") {
-            console.log("VELOURA DEV: Active session detected on login load.");
-          }
+        if (!session) return; // No session — stay on login
 
-          let profileCompleted = false;
-          let profileData: any = null;
-          try {
-            const res = await fetch("/api/profile", {
-              headers: { Authorization: `Bearer ${session.access_token}` },
-            });
-            if (res.ok) {
-              profileData = await res.json();
-              profileCompleted = profileData?.profile?.profileCompleted === true;
-            }
-          } catch (_) {}
-
-          if (process.env.NODE_ENV === "development") {
-            console.log("VELOURA DEV: profileCompleted value:", profileCompleted);
-          }
-
-          const target = profileCompleted ? `/${currentLang}/dashboard` : `/${currentLang}/onboarding`;
-          if (process.env.NODE_ENV === "development") {
-            console.log("VELOURA DEV: Redirecting loaded session to:", target);
-          }
-          window.location.replace(target);
-        }
-      } catch (err) {
-        console.error("Error checking session on load:", err);
+        // Has session — redirect silently
+        const result = await getPostLoginRedirect(currentLang);
+        window.location.replace(result.path);
+      } catch (_) {
+        // Stay on login if anything fails
       }
     };
     checkSession();
@@ -60,66 +40,25 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setErrorMsg("");
-    setSuccessMsg("");
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
       if (error) throw error;
+      if (!data?.session) throw new Error("No se pudo iniciar sesión. Inténtalo de nuevo.");
 
-      if (data?.session) {
-        // Set cookie for middleware
-        document.cookie = `veloura-auth-session=${data.session.access_token}; path=/; max-age=${data.session.expires_in}; SameSite=Lax`;
-
-        if (process.env.NODE_ENV === "development") {
-          console.log("VELOURA DEV: Login success, fetching profile status...");
-        }
-
-        // Try to fetch profile from API to get profileCompleted status
-        let profileCompleted = false;
-        let profileData: any = null;
-        try {
-          const res = await fetch("/api/profile", {
-            headers: { Authorization: `Bearer ${data.session.access_token}` },
-          });
-          if (res.ok) {
-            profileData = await res.json();
-            profileCompleted = profileData?.profile?.profileCompleted === true;
-          }
-        } catch (_) {}
-
-        if (process.env.NODE_ENV === "development") {
-          console.log("VELOURA DEV: profileCompleted is:", profileCompleted);
-        }
-
-        // Save to localStorage
-        const userObj = {
-          id: data.user.id,
-          email: data.user.email,
-          role: profileData?.role || "USER",
-          profile: {
-            ...(profileData?.profile || {}),
-            firstName: profileData?.profile?.firstName || data.user.user_metadata?.firstName || "",
-            birthDate: profileData?.profile?.birthDate || data.user.user_metadata?.birthDate || "",
-            gender: profileData?.profile?.gender || data.user.user_metadata?.gender || "",
-            country: profileData?.profile?.country || data.user.user_metadata?.country || "",
-            profileCompleted,
-          },
-        };
-        localStorage.setItem("veloura_user", JSON.stringify(userObj));
-
-        setSuccessMsg(t("auth.successLogin"));
-
-        // Redirect based on profileCompleted immediately using replace
-        const target = profileCompleted ? `/${currentLang}/dashboard` : `/${currentLang}/onboarding`;
-        if (process.env.NODE_ENV === "development") {
-          console.log("VELOURA DEV: Redirecting user post-login to:", target);
-        }
-        window.location.replace(target);
-      }
+      // Use central helper to determine redirect
+      const result = await getPostLoginRedirect(currentLang);
+      window.location.replace(result.path);
     } catch (err: any) {
       console.error("Auth error:", err);
-      setErrorMsg(`${t("auth.errorAuth")}: ${err.message || err}`);
+      const msg = err.message || "";
+      if (msg.includes("Invalid login credentials")) {
+        setErrorMsg("Email o contraseña incorrectos.");
+      } else if (msg.includes("Email not confirmed")) {
+        setErrorMsg("Confirma tu email antes de iniciar sesión.");
+      } else {
+        setErrorMsg(msg || "Error al iniciar sesión.");
+      }
       setLoading(false);
     }
   };
@@ -154,6 +93,7 @@ export default function LoginPage() {
           <div>
             <label className="block text-xs font-semibold text-muted mb-1">{t("common.email")}</label>
             <input
+              id="login-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -161,11 +101,13 @@ export default function LoginPage() {
               placeholder="name@example.com"
               required
               autoComplete="email"
+              // NO autoFocus — prevents keyboard opening on Android WebView on load
             />
           </div>
           <div>
             <label className="block text-xs font-semibold text-muted mb-1">{t("common.password")}</label>
             <input
+              id="login-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -176,16 +118,20 @@ export default function LoginPage() {
             />
           </div>
 
-          {errorMsg && <p className="text-red-400 text-xs mt-1 text-center font-medium">{errorMsg}</p>}
-          {successMsg && <p className="text-green-400 text-xs mt-1 text-center font-medium">{successMsg}</p>}
+          {errorMsg && (
+            <p className="text-red-400 text-xs mt-1 text-center font-medium bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
+              ⚠️ {errorMsg}
+            </p>
+          )}
 
           <button
+            id="login-submit"
             type="submit"
             disabled={loading}
             className="w-full py-3 font-bold rounded-xl hover:opacity-90 transition disabled:opacity-50 text-sm shadow-md text-background"
             style={{ background: loading ? "#888" : "linear-gradient(135deg, #D4A373, #FF6B8B)" }}
           >
-            {loading ? t("common.loading") : t("auth.signIn")}
+            {loading ? "⏳ Verificando..." : t("auth.signIn")}
           </button>
         </form>
 

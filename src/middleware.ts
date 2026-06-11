@@ -54,9 +54,29 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const { data: { user } } = await supabase.auth.getUser();
+  let isAuthenticated = false;
+  let user = null;
 
-  const isAuthenticated = !!user;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+    if (user) {
+      isAuthenticated = true;
+    }
+  } catch (_) {}
+
+  if (!isAuthenticated) {
+    const customCookie = request.cookies.get("veloura-auth-session");
+    if (customCookie?.value) {
+      try {
+        const { data: fallbackData, error } = await supabase.auth.getUser(customCookie.value);
+        if (!error && fallbackData?.user) {
+          user = fallbackData.user;
+          isAuthenticated = true;
+        }
+      } catch (_) {}
+    }
+  }
 
   // Route categories
   const isLandingPage = pathname === `/${currentLocale}`;

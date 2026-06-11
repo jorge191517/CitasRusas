@@ -17,6 +17,45 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  // Check active session on load
+  React.useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          if (process.env.NODE_ENV === "development") {
+            console.log("VELOURA DEV: Active session detected on login load.");
+          }
+
+          let profileCompleted = false;
+          let profileData: any = null;
+          try {
+            const res = await fetch("/api/profile", {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            if (res.ok) {
+              profileData = await res.json();
+              profileCompleted = profileData?.profile?.profileCompleted === true;
+            }
+          } catch (_) {}
+
+          if (process.env.NODE_ENV === "development") {
+            console.log("VELOURA DEV: profileCompleted value:", profileCompleted);
+          }
+
+          const target = profileCompleted ? `/${currentLang}/dashboard` : `/${currentLang}/onboarding`;
+          if (process.env.NODE_ENV === "development") {
+            console.log("VELOURA DEV: Redirecting loaded session to:", target);
+          }
+          window.location.replace(target);
+        }
+      } catch (err) {
+        console.error("Error checking session on load:", err);
+      }
+    };
+    checkSession();
+  }, [currentLang]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -32,6 +71,10 @@ export default function LoginPage() {
         // Set cookie for middleware
         document.cookie = `veloura-auth-session=${data.session.access_token}; path=/; max-age=${data.session.expires_in}; SameSite=Lax`;
 
+        if (process.env.NODE_ENV === "development") {
+          console.log("VELOURA DEV: Login success, fetching profile status...");
+        }
+
         // Try to fetch profile from API to get profileCompleted status
         let profileCompleted = false;
         let profileData: any = null;
@@ -44,6 +87,10 @@ export default function LoginPage() {
             profileCompleted = profileData?.profile?.profileCompleted === true;
           }
         } catch (_) {}
+
+        if (process.env.NODE_ENV === "development") {
+          console.log("VELOURA DEV: profileCompleted is:", profileCompleted);
+        }
 
         // Save to localStorage
         const userObj = {
@@ -63,10 +110,12 @@ export default function LoginPage() {
 
         setSuccessMsg(t("auth.successLogin"));
 
-        // Redirect based on profileCompleted
-        window.location.href = profileCompleted
-          ? `/${currentLang}/dashboard`
-          : `/${currentLang}/onboarding`;
+        // Redirect based on profileCompleted immediately using replace
+        const target = profileCompleted ? `/${currentLang}/dashboard` : `/${currentLang}/onboarding`;
+        if (process.env.NODE_ENV === "development") {
+          console.log("VELOURA DEV: Redirecting user post-login to:", target);
+        }
+        window.location.replace(target);
       }
     } catch (err: any) {
       console.error("Auth error:", err);

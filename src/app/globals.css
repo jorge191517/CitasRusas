@@ -3,10 +3,22 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    /* Use dynamic viewport height so keyboard doesn't shrink the layout */
+    height: -webkit-fill-available;
+  }
+
   body {
     background-color: #0A1128;
     color: #FFFFFF;
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    /* Prevent scroll bounce on iOS/Android WebView */
+    overscroll-behavior: none;
+    /* Prevent text highlight flash on tap */
+    -webkit-tap-highlight-color: transparent;
+    /* Fix height for mobile */
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
   }
 }
 
@@ -31,4 +43,26 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #FF6B8B;
+}
+
+/* =====================================================
+   MOBILE / APK FIXES
+   ===================================================== */
+
+/* Ensure inputs don't get hidden behind keyboard on Android WebView */
+input, textarea, select {
+  /* Prevent zoom on focus in iOS */
+  font-size: 16px !important;
+}
+
+/* When any input is focused on mobile, allow the page to scroll to it */
+input:focus, textarea:focus {
+  scroll-margin-top: 80px;
+  scroll-margin-bottom: 120px;
+}
+
+/* Fix for Android WebView: full-screen pages use 100dvh when available */
+.min-h-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
 }

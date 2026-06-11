@@ -3,7 +3,13 @@
   "appName": "Veloura",
   "webDir": "out",
   "server": {
-    "url": "https://citas-rusas-pr71.vercel.app/es",
-    "cleartext": false
+    "url": "https://citas-rusas-pr71.vercel.app/es/auth-redirect",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
   }
 }

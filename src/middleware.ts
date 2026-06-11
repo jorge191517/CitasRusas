@@ -81,6 +81,7 @@ export async function middleware(request: NextRequest) {
   // Route categories
   const isLandingPage = pathname === `/${currentLocale}`;
   const isAuthRoute = pathname.includes("/login") || pathname.includes("/register");
+  const isAuthRedirect = pathname.includes("/auth-redirect"); // APK entry — always allow
   const isProtectedRoute =
     pathname.includes("/dashboard") ||
     pathname.includes("/profile") ||
@@ -88,6 +89,11 @@ export async function middleware(request: NextRequest) {
     pathname.includes("/admin") ||
     pathname.includes("/likes") ||
     pathname.includes("/onboarding");
+
+  // APK splash page — never block
+  if (isAuthRedirect) {
+    return response;
+  }
 
   // Protected routes → redirect to login if not authenticated
   if (isProtectedRoute && !isAuthenticated) {

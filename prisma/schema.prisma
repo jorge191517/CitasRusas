@@ -82,8 +82,12 @@ model Profile {
   maritalStatus  String?        // Single, Divorced, etc.
   bio            String?
   interests      String[]       // Array of interests e.g., ["Music", "Travel"]
+  hobbies        String[]       @default([]) // Array of hobbies
+  lookingFor     String?        // friendship | relationship | serious | marriage | cultural
   height         Float?         // Height in cm
-  videoIntroUrl  String?        // Optional video presentation url
+  mainPhotoUrl   String?        // Primary profile photo URL
+  videoIntroUrl  String?        // Optional video presentation url (max 40s)
+  profileCompleted Boolean      @default(false) // Onboarding completed flag
   verifiedStatus VerificationStatus @default(UNVERIFIED)
   
   createdAt      DateTime       @default(now())

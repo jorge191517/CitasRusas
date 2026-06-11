@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Locale, getTranslation } from "../../lib/i18n";
-import LanguageSwitcher from "../../components/LanguageSwitcher";
+import LandingHeader from "../../components/LandingHeader";
 import React from "react";
 
 interface PageProps {
@@ -18,28 +18,8 @@ export default async function LandingPage({ params }: PageProps) {
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#D4A373]/10 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[#FF6B8B]/10 blur-[120px] rounded-full pointer-events-none" />
 
-      {/* Header */}
-      <header className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 flex flex-row items-center justify-between z-10 relative gap-2">
-        <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
-          {/* Veloura Gold Logo */}
-          <div className="relative w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center">
-            <svg viewBox="0 0 512 512" className="w-full h-full text-primary" fill="currentColor">
-              <path d="M256,120 C230,80 180,80 150,110 C120,140 120,190 150,220 L256,330 L362,220 C392,190 392,140 362,110 C332,80 282,80 256,120 Z" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M256,170 C240,140 200,140 180,160 C160,180 160,210 180,230 L256,305 L332,230 C352,210 352,180 332,160 C312,140 272,140 256,170 Z" fill="none" stroke="#FF6B8B" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </div>
-          <span className="text-lg sm:text-2xl font-bold tracking-widest text-primary font-serif">VELOURA</span>
-        </div>
-        <div className="flex items-center space-x-2 sm:space-x-4 shrink-0">
-          <LanguageSwitcher currentLang={currentLang} />
-          <Link
-            href={`/${currentLang}/login`}
-            className="px-3 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold rounded-full border border-primary/40 text-primary hover:bg-primary hover:text-background transition-all duration-300 shadow-md shrink-0"
-          >
-            {t("common.login")}
-          </Link>
-        </div>
-      </header>
+      {/* Header — auth-aware */}
+      <LandingHeader currentLang={currentLang} />
 
       {/* Hero Section */}
       <main className="max-w-7xl mx-auto px-6 py-12 flex flex-col lg:flex-row items-center justify-between gap-12 z-10 flex-grow w-full">

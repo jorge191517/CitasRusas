@@ -19,6 +19,7 @@ export interface DatingProfile {
   height?: number;
   imageUrl: string;
   verified: boolean;
+  lookingFor?: string; // friendship | relationship | serious | marriage | cultural
 }
 
 interface TinderCardProps {

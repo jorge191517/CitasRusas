@@ -222,17 +222,64 @@ export default function OnboardingPage() {
   };
 
   // ─── Upload helper (Supabase Storage) ────────────────────────
+  // Converts file to base64 data URL — persistent, can be stored in DB
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   const uploadFile = async (file: File, path: string): Promise<string> => {
-    const { data, error } = await supabase.storage
-      .from("profile-media")
-      .upload(path, file, { upsert: true, contentType: file.type });
-    if (error) {
-      // If no Storage bucket, return a mock URL for dev
-      console.warn("Storage upload failed, using object URL:", error.message);
-      return URL.createObjectURL(file);
+    // 1. Try Supabase Storage (public bucket 'profile-media')
+    try {
+      const { data, error } = await supabase.storage
+        .from("profile-media")
+        .upload(path, file, { upsert: true, contentType: file.type });
+
+      if (!error && data) {
+        const { data: pub } = supabase.storage.from("profile-media").getPublicUrl(data.path);
+        const publicUrl = pub.publicUrl;
+        // Verify it's a real https URL, not a blob
+        if (publicUrl && publicUrl.startsWith("https://")) {
+          console.log("[UPLOAD] Supabase Storage OK:", publicUrl);
+          return publicUrl;
+        }
+      }
+      console.warn("[UPLOAD] Supabase Storage failed:", error?.message, "— using base64 fallback");
+    } catch (storageErr) {
+      console.warn("[UPLOAD] Supabase Storage exception:", storageErr);
     }
-    const { data: pub } = supabase.storage.from("profile-media").getPublicUrl(data.path);
-    return pub.publicUrl;
+
+    // 2. Fallback: convert to base64 data URL (persistent — works without Storage bucket)
+    // IMPORTANT: base64 URLs are stored in DB and always work. Max ~2MB recommended.
+    if (file.size <= 2 * 1024 * 1024) {
+      const base64 = await fileToBase64(file);
+      console.log("[UPLOAD] Using base64 fallback, size:", Math.round(file.size / 1024), "KB");
+      return base64;
+    }
+
+    // 3. File too large for base64 — compress it first
+    const compressedBase64 = await new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX = 800;
+        let w = img.width, h = img.height;
+        if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+        if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.75));
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+    console.log("[UPLOAD] Using compressed base64 fallback");
+    return compressedBase64;
   };
 
   // ─── SUBMIT FINAL ─────────────────────────────────────────────

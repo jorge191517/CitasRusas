@@ -24,10 +24,10 @@ export const profileSchema = z.object({
   interests: z.array(z.string()).optional().default([]),
   hobbies: z.array(z.string()).optional().default([]),
   lookingFor: z.string().optional().nullable(),
-  mainPhotoUrl: z.string().url("Invalid photo URL").optional().nullable().or(z.literal("")),
+  mainPhotoUrl: z.string().optional().nullable().or(z.literal("")),
   profileCompleted: z.boolean().optional().default(false),
   height: z.number().min(100).max(250).optional().nullable(),
-  videoIntroUrl: z.string().url("Invalid video URL").optional().nullable().or(z.literal("")),
+  videoIntroUrl: z.string().optional().nullable().or(z.literal("")),
 });
 
 // 2. Message Schema Validation

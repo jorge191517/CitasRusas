@@ -143,13 +143,80 @@ export default function ProfilePage() {
     }).catch(() => {});
   };
 
-  const handlePhotoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [uploading, setUploading] = useState(false);
+
+  // Converts file to base64 data URL
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const uploadFile = async (file: File, path: string): Promise<string> => {
+    try {
+      const { data, error } = await supabase.storage
+        .from("profile-media")
+        .upload(path, file, { upsert: true, contentType: file.type });
+
+      if (!error && data) {
+        const { data: pub } = supabase.storage.from("profile-media").getPublicUrl(data.path);
+        const publicUrl = pub.publicUrl;
+        if (publicUrl && publicUrl.startsWith("https://")) {
+          return publicUrl;
+        }
+      }
+    } catch (storageErr) {
+      console.warn("[UPLOAD] Storage exception:", storageErr);
+    }
+
+    if (file.size <= 2 * 1024 * 1024) {
+      return await fileToBase64(file);
+    }
+
+    return await new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX = 800;
+        let w = img.width, h = img.height;
+        if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+        if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.75));
+      };
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handlePhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) return;
-    const url = URL.createObjectURL(file);
-    if (!mainPhotoUrl) setMainPhotoUrl(url);
-    else if (photos.length < 5) setPhotos(prev => [...prev, url]);
+
+    try {
+      setUploading(true);
+      const userId = currentUser?.id || "user";
+      const path = `${userId}/${Date.now()}_profile`;
+      const uploadedUrl = await uploadFile(file, path);
+
+      if (uploadedUrl) {
+        if (!mainPhotoUrl) {
+          setMainPhotoUrl(uploadedUrl);
+        } else if (photos.length < 5) {
+          setPhotos(prev => [...prev, uploadedUrl]);
+        }
+      }
+    } catch (err) {
+      console.error("Error uploading photo:", err);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const age = calcAge(currentUser?.profile?.birthDate);
@@ -210,8 +277,9 @@ export default function ProfilePage() {
           <button
             onClick={() => photoRef.current?.click()}
             className="absolute top-4 left-4 w-9 h-9 bg-black/50 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-black/70 transition border border-white/20"
+            disabled={uploading}
           >
-            📷
+            {uploading ? "⏳" : "📷"}
           </button>
           <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFile} />
 
@@ -263,8 +331,9 @@ export default function ProfilePage() {
                 <button
                   onClick={() => photoRef.current?.click()}
                   className="aspect-square rounded-2xl border-2 border-dashed border-white/15 hover:border-primary/40 flex items-center justify-center text-muted text-2xl hover:text-white transition"
+                  disabled={uploading}
                 >
-                  +
+                  {uploading ? "⏳" : "+"}
                 </button>
               )}
             </div>

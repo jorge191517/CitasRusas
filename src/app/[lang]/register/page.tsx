@@ -91,7 +91,6 @@ export default function RegisterPage() {
           document.cookie = `veloura-auth-session=${token}; path=/; SameSite=Lax; Secure`;
         }
         
-        // Build Profile payload. Since lastName and city are required in Prisma schema, we supply empty string fallbacks.
         const userObj = {
           id: data.user.id,
           email: data.user.email,
@@ -126,7 +125,6 @@ export default function RegisterPage() {
 
         if (!apiRes.ok) {
           const apiErr = await apiRes.json();
-          // If the profile already exists (e.g. created by database trigger or previous attempt), ignore the error and proceed
           if (!apiErr.error?.includes("already exists") && !apiErr.error?.includes("Unique constraint")) {
             throw new Error(apiErr.error || "Error al crear el perfil de usuario en la base de datos.");
           }
@@ -134,8 +132,7 @@ export default function RegisterPage() {
 
         setSuccessMsg(t("auth.successRegister"));
         setTimeout(() => {
-          router.push(`/${currentLang}/dashboard`);
-          router.refresh();
+          window.location.href = `/${currentLang}/dashboard`;
         }, 1200);
       }
     } catch (err: any) {
@@ -148,6 +145,16 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col justify-center items-center px-4 py-8 relative overflow-hidden">
+      {/* Volver top left link */}
+      <div className="absolute top-6 left-6 z-20">
+        <Link
+          href={`/${currentLang}`}
+          className="px-4 py-2 text-xs font-bold bg-[#151F3C]/80 border border-primary/20 hover:border-primary/40 text-primary rounded-full transition shadow-md"
+        >
+          ← {t("common.back")}
+        </Link>
+      </div>
+
       {/* Lights */}
       <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-[#D4A373]/10 blur-[150px] rounded-full" />
       <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-[#FF6B8B]/10 blur-[150px] rounded-full" />

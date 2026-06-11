@@ -25,7 +25,6 @@ export default function LoginPage() {
     setSuccessMsg("");
 
     try {
-      // Validate environment variables in development only
       if (process.env.NODE_ENV === "development") {
         if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
           console.error("DEBUG DEV ALERT: Supabase Public Env Variables are missing!");
@@ -52,14 +51,14 @@ export default function LoginPage() {
           JSON.stringify({
             id: data.user.id,
             email: data.user.email,
-            role: "USER" // Roles can be fetched via database query
+            role: "USER"
           })
         );
 
         setSuccessMsg(t("auth.successLogin"));
         setTimeout(() => {
-          router.push(`/${currentLang}/dashboard`);
-          router.refresh();
+          // Use window.location.href to force absolute state reloading in WebView / Capacitor
+          window.location.href = `/${currentLang}/dashboard`;
         }, 1000);
       }
     } catch (err: any) {
@@ -72,6 +71,16 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col justify-center items-center px-4 relative overflow-hidden">
+      {/* Volver top left link */}
+      <div className="absolute top-6 left-6 z-20">
+        <Link
+          href={`/${currentLang}`}
+          className="px-4 py-2 text-xs font-bold bg-[#151F3C]/80 border border-primary/20 hover:border-primary/40 text-primary rounded-full transition shadow-md"
+        >
+          ← {t("common.back")}
+        </Link>
+      </div>
+
       <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-[#D4A373]/10 blur-[150px] rounded-full" />
       <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-[#FF6B8B]/10 blur-[150px] rounded-full" />
 

@@ -7,6 +7,7 @@ import { Locale, getTranslation } from "../../../lib/i18n";
 import TinderCard, { DatingProfile } from "../../../components/TinderCard";
 import { mockProfiles } from "../../../lib/mockData";
 import LanguageSwitcher from "../../../components/LanguageSwitcher";
+import { supabase } from "../../../lib/supabase/client";
 
 export default function DashboardPage() {
   const params = useParams();
@@ -42,11 +43,16 @@ export default function DashboardPage() {
     setProfiles(mockProfiles);
   }, [currentLang, router]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Error signing out:", err);
+    }
     // Clear cookies & storage
     document.cookie = "veloura-auth-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
     localStorage.removeItem("veloura_user");
-    router.push(`/${currentLang}/login`);
+    window.location.href = `/${currentLang}/login`;
   };
 
   const handleSwipe = (direction: "left" | "right" | "up", profile: DatingProfile) => {
@@ -102,25 +108,33 @@ export default function DashboardPage() {
       {/* Main Header / Navigation */}
       <header className="w-full glass border-b border-primary/10 px-6 py-4 z-20">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-4 sm:space-x-6">
+            {/* Volver button */}
+            <Link
+              href={`/${currentLang}`}
+              className="px-3.5 py-1.5 text-xs font-bold bg-[#151F3C]/80 border border-primary/20 hover:border-primary/40 text-primary rounded-full transition shadow-md shrink-0"
+            >
+              ← {t("common.back")}
+            </Link>
+
             <Link href={`/${currentLang}/dashboard`} className="flex items-center space-x-2">
               <svg viewBox="0 0 512 512" className="w-8 h-8 text-primary" fill="currentColor">
                 <path d="M256,120 C230,80 180,80 150,110 C120,140 120,190 150,220 L256,330 L362,220 C392,190 392,140 362,110 C332,80 282,80 256,120 Z" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" />
                 <path d="M256,170 C240,140 200,140 180,160 C160,180 160,210 180,230 L256,305 L332,230 C352,210 352,180 332,160 C312,140 272,140 256,170 Z" fill="none" stroke="#FF6B8B" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
-              <span className="text-lg font-bold tracking-widest text-primary font-serif hidden sm:inline-block">VELOURA</span>
+              <span className="text-lg font-bold tracking-widest text-primary font-serif hidden md:inline-block">VELOURA</span>
             </Link>
             
             {/* Nav Tabs */}
-            <nav className="flex space-x-4 text-sm font-semibold">
+            <nav className="flex space-x-2 sm:space-x-4 text-xs sm:text-sm font-semibold">
               <Link href={`/${currentLang}/dashboard`} className="text-primary border-b-2 border-primary pb-1">
-                {t("dashboard.discover")}
+                {currentLang === "es" ? "Inicio" : (currentLang === "ru" ? "Главная" : "Home")}
               </Link>
               <Link href={`/${currentLang}/chat`} className="text-muted hover:text-white transition">
-                {t("chat.title")}
+                {currentLang === "es" ? "Chat" : (currentLang === "ru" ? "Чат" : "Chat")}
               </Link>
               <Link href={`/${currentLang}/profile`} className="text-muted hover:text-white transition">
-                {t("profile.title")}
+                {currentLang === "es" ? "Perfil" : (currentLang === "ru" ? "Профиль" : "Profile")}
               </Link>
               {currentUser?.role === "ADMIN" && (
                 <Link href={`/${currentLang}/admin`} className="text-secondary hover:text-white transition">
@@ -130,13 +144,13 @@ export default function DashboardPage() {
             </nav>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4">
             <LanguageSwitcher currentLang={currentLang} />
             <button
               onClick={handleLogout}
-              className="px-3.5 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-semibold rounded-full transition"
+              className="px-3.5 py-1.5 bg-red-600/20 border border-red-500/30 hover:bg-red-600/35 text-red-400 text-xs font-semibold rounded-full transition"
             >
-              {t("common.logout")}
+              {currentLang === "es" ? "Salir" : (currentLang === "ru" ? "Выйти" : "Logout")}
             </button>
           </div>
         </div>
@@ -305,16 +319,20 @@ export default function DashboardPage() {
         <div className="flex justify-around text-muted text-xs">
           <Link href={`/${currentLang}/dashboard`} className="flex flex-col items-center py-1 text-primary">
             <span>🎴</span>
-            <span>Descubrir</span>
+            <span>{currentLang === "es" ? "Inicio" : (currentLang === "ru" ? "Главная" : "Home")}</span>
           </Link>
           <Link href={`/${currentLang}/chat`} className="flex flex-col items-center py-1">
             <span>💬</span>
-            <span>Chats</span>
+            <span>{currentLang === "es" ? "Chat" : (currentLang === "ru" ? "Чат" : "Chat")}</span>
           </Link>
           <Link href={`/${currentLang}/profile`} className="flex flex-col items-center py-1">
             <span>👤</span>
-            <span>Perfil</span>
+            <span>{currentLang === "es" ? "Perfil" : (currentLang === "ru" ? "Профиль" : "Profile")}</span>
           </Link>
+          <button onClick={handleLogout} className="flex flex-col items-center py-1 text-red-400">
+            <span>🚪</span>
+            <span>{currentLang === "es" ? "Salir" : (currentLang === "ru" ? "Выйти" : "Logout")}</span>
+          </button>
         </div>
       </footer>
     </div>

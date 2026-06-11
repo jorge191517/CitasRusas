@@ -84,6 +84,11 @@ export async function POST(req: NextRequest) {
 
     const validProfile = profileValidation.data;
 
+    // Reject blob URLs
+    if (validProfile.mainPhotoUrl && validProfile.mainPhotoUrl.startsWith("blob:")) {
+      return NextResponse.json({ error: "La URL de la foto de perfil no puede ser una URL de tipo blob local." }, { status: 400 });
+    }
+
     try {
       // Create user and profile in database
       const dbUser = await prisma.user.upsert({
@@ -176,6 +181,11 @@ export async function PATCH(req: NextRequest) {
     }
 
     const validProfile = profileValidation.data;
+
+    // Reject blob URLs
+    if (validProfile.mainPhotoUrl && validProfile.mainPhotoUrl.startsWith("blob:")) {
+      return NextResponse.json({ error: "La URL de la foto de perfil no puede ser una URL de tipo blob local." }, { status: 400 });
+    }
 
     try {
       const activeEmail = authUser?.email || body.email || "";

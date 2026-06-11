@@ -145,53 +145,29 @@ export default function ProfilePage() {
 
   const [uploading, setUploading] = useState(false);
 
-  // Converts file to base64 data URL
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
   const uploadFile = async (file: File, path: string): Promise<string> => {
-    try {
-      const { data, error } = await supabase.storage
-        .from("profile-media")
-        .upload(path, file, { upsert: true, contentType: file.type });
+    const { data, error } = await supabase.storage
+      .from("profile-media")
+      .upload(path, file, { upsert: true, contentType: file.type });
 
-      if (!error && data) {
-        const { data: pub } = supabase.storage.from("profile-media").getPublicUrl(data.path);
-        const publicUrl = pub.publicUrl;
-        if (publicUrl && publicUrl.startsWith("https://")) {
-          return publicUrl;
-        }
-      }
-    } catch (storageErr) {
-      console.warn("[UPLOAD] Storage exception:", storageErr);
+    if (error) {
+      console.error("[UPLOAD] Supabase Storage failed:", error.message);
+      throw new Error(`Error al subir la imagen: ${error.message}`);
     }
 
-    if (file.size <= 2 * 1024 * 1024) {
-      return await fileToBase64(file);
+    if (!data) {
+      throw new Error("No se pudo obtener la información del archivo subido.");
     }
 
-    return await new Promise<string>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX = 800;
-        let w = img.width, h = img.height;
-        if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
-        if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
-        canvas.width = w;
-        canvas.height = h;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", 0.75));
-      };
-      img.onerror = reject;
-      img.src = URL.createObjectURL(file);
-    });
+    const { data: pub } = supabase.storage.from("profile-media").getPublicUrl(data.path);
+    const publicUrl = pub.publicUrl;
+
+    if (!publicUrl || publicUrl.startsWith("blob:") || !publicUrl.startsWith("http")) {
+      throw new Error("La URL devuelta por el servidor no es válida o es una URL temporal (blob).");
+    }
+
+    console.log("[UPLOAD] Supabase Storage OK:", publicUrl);
+    return publicUrl;
   };
 
   const handlePhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {

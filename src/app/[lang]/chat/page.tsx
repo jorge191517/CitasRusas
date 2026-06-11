@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
+import { useParams } from "next/navigation";
 import { Locale, getTranslation } from "../../../lib/i18n";
-import LanguageSwitcher from "../../../components/LanguageSwitcher";
 import { DatingProfile } from "../../../components/TinderCard";
-import { supabase } from "../../../lib/supabase/client";
+import { mockProfiles } from "../../../lib/mockData";
+import AppHeader from "../../../components/AppHeader";
+import MobileBottomNav from "../../../components/MobileBottomNav";
 
 interface ChatMessage {
   id: string;
@@ -15,369 +15,312 @@ interface ChatMessage {
   createdAt: string;
 }
 
+const REPLIES: Record<string, string[]> = {
+  es: [
+    "¡Qué bien! Me alegra que me respondas. ¿Cuándo vienes de visita? 😊",
+    "Me gusta mucho tu perfil. ¿Qué planes tienes para el fin de semana?",
+    "¡Suena interesante! Yo estoy libre hoy por la tarde.",
+    "Qué lindo detalle. Me gustaría practicar español contigo 🇪🇸",
+    "Claro, cuéntame más sobre ti. Tengo mucha curiosidad.",
+  ],
+  en: [
+    "That sounds great! What are you up to today? 😊",
+    "I really like your vibe. Let's exchange languages sometime!",
+    "Are you planning to travel soon?",
+    "I'd love to chat more. Tell me about your city!",
+    "Sounds fun! Let's plan something together.",
+  ],
+  ru: [
+    "Как здорово! Я рада нашему общению. Расскажи подробнее о себе. 😊",
+    "Мне очень нравится твой профиль! Чем занимаешься сегодня?",
+    "Отличный день! Надеюсь, у тебя тоже все хорошо.",
+    "Давай созвонимся когда-нибудь! Желаю отличного настроения.",
+    "Здорово! Расскажи о своем городе, мне очень интересно.",
+  ],
+};
+
 export default function ChatPage() {
   const params = useParams();
-  const router = useRouter();
   const currentLang = (params.lang as Locale) || "es";
   const t = getTranslation(currentLang);
-
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error("Error signing out:", err);
-    }
-    document.cookie = "veloura-auth-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-    localStorage.removeItem("veloura_user");
-    window.location.href = `/${currentLang}/login`;
-  };
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [matches, setMatches] = useState<DatingProfile[]>([]);
   const [activeMatch, setActiveMatch] = useState<DatingProfile | null>(null);
-  
-  // Chat dialogue state
   const [messages, setMessages] = useState<Record<string, ChatMessage[]>>({});
   const [typedMessage, setTypedMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [showList, setShowList] = useState(true);
 
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("veloura_user");
-    if (!storedUser) {
-      router.push(`/${currentLang}/login`);
-      return;
-    }
-    setCurrentUser(JSON.parse(storedUser));
+    const stored = localStorage.getItem("veloura_user");
+    if (!stored) { window.location.href = `/${currentLang}/login`; return; }
+    setCurrentUser(JSON.parse(stored));
 
-    // Load matched profiles from LocalStorage
-    const storedMatches = JSON.parse(localStorage.getItem("veloura_matches") || "[]");
-    setMatches(storedMatches);
+    const storedMatches: DatingProfile[] = JSON.parse(localStorage.getItem("veloura_matches") || "[]");
+    // If no matches yet, use first 2 mock profiles as demo chats
+    const chatList = storedMatches.length > 0 ? storedMatches : mockProfiles.slice(0, 2);
+    setMatches(chatList);
 
-    // Initial base messages setup for testing
-    const initialMsgs: Record<string, ChatMessage[]> = {};
-    storedMatches.forEach((m: DatingProfile) => {
-      initialMsgs[m.id] = [
+    const initMsgs: Record<string, ChatMessage[]> = {};
+    chatList.forEach((m: DatingProfile) => {
+      initMsgs[m.id] = [
         {
-          id: `msg-init-${m.id}`,
+          id: `init-${m.id}`,
           senderId: m.id,
-          text: `Привет! ¡Hola! Nice to connect with you. How are you doing? 😊`,
-          createdAt: new Date(Date.now() - 3600000).toISOString()
-        }
+          text: currentLang === "ru"
+            ? `Привет! Рада познакомиться с тобой. Как дела? 😊`
+            : currentLang === "es"
+            ? `¡Hola! Estoy muy contenta de conectar contigo. ¿Cómo estás? 😊`
+            : `Hi there! Really happy to connect with you. How are you? 😊`,
+          createdAt: new Date(Date.now() - 3600000).toISOString(),
+        },
       ];
     });
-    setMessages(initialMsgs);
-  }, [currentLang, router]);
+    setMessages(initMsgs);
+  }, [currentLang]);
 
-  // Scroll to bottom when messages update
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeMatch]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const openChat = (match: DatingProfile) => {
+    setActiveMatch(match);
+    setShowList(false);
+  };
+
+  const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!typedMessage.trim() || !activeMatch || !currentUser) return;
 
-    const matchId = activeMatch.id;
     const newMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderId: currentUser.id,
-      text: typedMessage,
-      createdAt: new Date().toISOString()
+      text: typedMessage.trim(),
+      createdAt: new Date().toISOString(),
     };
 
     setMessages((prev) => ({
       ...prev,
-      [matchId]: [...(prev[matchId] || []), newMsg]
+      [activeMatch.id]: [...(prev[activeMatch.id] || []), newMsg],
     }));
-    
     setTypedMessage("");
 
-    // Simulate other user typing indicator and reply
     setIsTyping(true);
     setTimeout(() => {
       setIsTyping(false);
-      const replyMsg: ChatMessage = {
-        id: `msg-reply-${Date.now()}`,
-        senderId: matchId,
-        text: getRandomReply(activeMatch.firstName, currentLang),
-        createdAt: new Date().toISOString()
+      const replies = REPLIES[currentLang] || REPLIES.es;
+      const reply: ChatMessage = {
+        id: `reply-${Date.now()}`,
+        senderId: activeMatch.id,
+        text: replies[Math.floor(Math.random() * replies.length)],
+        createdAt: new Date().toISOString(),
       };
-
       setMessages((prev) => ({
         ...prev,
-        [matchId]: [...(prev[matchId] || []), replyMsg]
+        [activeMatch.id]: [...(prev[activeMatch.id] || []), reply],
       }));
-    }, 2000);
-  };
-
-  const getRandomReply = (name: string, lang: string) => {
-    const repliesEs = [
-      "¡Qué bien! Me alegra que me respondas. ¿Cuándo vienes de visita?",
-      "Me gusta mucho tu perfil. ¿Qué planes tienes para el fin de semana?",
-      "¡Suena interesante! Yo estoy libre hoy por la tarde.",
-      "Qué lindo detalle. Me gustaría mucho practicar español contigo 🇪🇸"
-    ];
-    
-    const repliesEn = [
-      "That sounds great! What are you up to today?",
-      "I really like your vibe. Let's exchange languages sometime!",
-      "Are you planning to travel soon?",
-      "I'd love to chat more. Tell me about your city!"
-    ];
-
-    const repliesRu = [
-      "Как здорово! Я рада нашему общению. Расскажи подробнее о себе.",
-      "Мне очень нравится твой профиль! Чем занимаешься сегодня?",
-      "Отличный день! Надеюсь, у тебя тоже все хорошо.",
-      "Давай созвонимся когда-нибудь! Желаю отличного настроения."
-    ];
-
-    const list = lang === "es" ? repliesEs : lang === "ru" ? repliesRu : repliesEn;
-    return list[Math.floor(Math.random() * list.length)];
+    }, 1800 + Math.random() * 1000);
   };
 
   const activeMessages = activeMatch ? messages[activeMatch.id] || [] : [];
 
+  const getLastMessage = (id: string) => {
+    const msgs = messages[id];
+    if (!msgs || msgs.length === 0) return "";
+    return msgs[msgs.length - 1].text;
+  };
+
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col justify-between relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-[40%] h-[40%] bg-[#D4A373]/5 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-[40%] h-[40%] bg-[#FF6B8B]/5 blur-[120px] rounded-full pointer-events-none" />
+    <div className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
+      <div className="fixed top-0 right-0 w-[40%] h-[40%] bg-[#D4A373]/5 blur-[100px] rounded-full pointer-events-none z-0" />
+      <div className="fixed bottom-0 left-0 w-[40%] h-[40%] bg-[#FF6B8B]/5 blur-[100px] rounded-full pointer-events-none z-0" />
 
-      {/* Main Header / Navigation */}
-      <header className="w-full glass border-b border-primary/10 px-6 py-4 z-20">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-4 sm:space-x-6">
-            {/* Volver button */}
-            <Link
-              href={`/${currentLang}/dashboard`}
-              className="px-3.5 py-1.5 text-xs font-bold bg-[#151F3C]/80 border border-primary/20 hover:border-primary/40 text-primary rounded-full transition shadow-md shrink-0"
-            >
-              ← {t("common.back")}
-            </Link>
+      <AppHeader
+        currentLang={currentLang}
+        title={activeMatch && !showList
+          ? activeMatch.firstName
+          : (currentLang === "es" ? "Chats" : (currentLang === "ru" ? "Сообщения" : "Chats"))}
+        showBackTo={activeMatch && !showList ? undefined : undefined}
+      />
 
-            <Link href={`/${currentLang}/dashboard`} className="flex items-center space-x-2">
-              <svg viewBox="0 0 512 512" className="w-8 h-8 text-primary" fill="currentColor">
-                <path d="M256,120 C230,80 180,80 150,110 C120,140 120,190 150,220 L256,330 L362,220 C392,190 392,140 362,110 C332,80 282,80 256,120 Z" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M256,170 C240,140 200,140 180,160 C160,180 160,210 180,230 L256,305 L332,230 C352,210 352,180 332,160 C312,140 272,140 256,170 Z" fill="none" stroke="#FF6B8B" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-              <span className="text-lg font-bold tracking-widest text-primary font-serif hidden md:inline-block">VELOURA</span>
-            </Link>
-            
-            {/* Nav Tabs */}
-            <nav className="flex space-x-2 sm:space-x-4 text-xs sm:text-sm font-semibold">
-              <Link href={`/${currentLang}/dashboard`} className="text-muted hover:text-white transition">
-                {currentLang === "es" ? "Inicio" : (currentLang === "ru" ? "Главная" : "Home")}
-              </Link>
-              <Link href={`/${currentLang}/chat`} className="text-primary border-b-2 border-primary pb-1">
-                {currentLang === "es" ? "Chat" : (currentLang === "ru" ? "Чат" : "Chat")}
-              </Link>
-              <Link href={`/${currentLang}/profile`} className="text-muted hover:text-white transition">
-                {currentLang === "es" ? "Perfil" : (currentLang === "ru" ? "Профиль" : "Profile")}
-              </Link>
-              {currentUser?.role === "ADMIN" && (
-                <Link href={`/${currentLang}/admin`} className="text-secondary hover:text-white transition">
-                  🛡️ Admin
-                </Link>
-              )}
-            </nav>
-          </div>
-
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            <LanguageSwitcher currentLang={currentLang} />
-            <button
-              onClick={handleLogout}
-              className="px-3.5 py-1.5 bg-red-600/20 border border-red-500/30 hover:bg-red-600/35 text-red-400 text-xs font-semibold rounded-full transition"
-            >
-              {currentLang === "es" ? "Salir" : (currentLang === "ru" ? "Выйти" : "Logout")}
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Chat workspace grid */}
-      <main className="flex-grow max-w-7xl mx-auto w-full px-6 py-8 flex flex-col md:flex-row gap-6 z-10 overflow-hidden">
-        {/* Left matches column */}
-        <div className="w-full md:w-80 glass border border-primary/10 rounded-3xl p-4 flex flex-col space-y-4">
-          <h2 className="text-lg font-bold text-white tracking-wide border-b border-white/5 pb-2">Matches ♥</h2>
-          
-          <div className="flex-grow overflow-y-auto space-y-2 max-h-[300px] md:max-h-full">
+      <main className="flex-1 overflow-hidden relative z-10 max-w-lg mx-auto w-full flex flex-col" style={{ paddingBottom: "80px" }}>
+        {/* ── CONVERSATION LIST ── */}
+        {showList && (
+          <div className="flex-1 overflow-y-auto">
             {matches.length === 0 ? (
-              <p className="text-xs text-muted text-center py-12">
-                Sin matches todavía. ¡Empieza a buscar perfiles en el Discover deck!
-              </p>
+              <div className="flex flex-col items-center justify-center h-full py-20 space-y-4 px-6">
+                <span className="text-5xl">💬</span>
+                <h3 className="font-bold text-white text-base">
+                  {currentLang === "es" ? "Sin conversaciones aún" : "No conversations yet"}
+                </h3>
+                <p className="text-xs text-muted text-center">
+                  {currentLang === "es" ? "Cuando consigas un match, podréis chatear aquí." : "Once you get a match, you can chat here."}
+                </p>
+              </div>
             ) : (
-              matches.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setActiveMatch(m)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-2xl border transition-all text-left ${
-                    activeMatch?.id === m.id
-                      ? "bg-primary/10 border-primary"
-                      : "bg-[#0A1128]/50 border-white/5 hover:border-primary/40"
-                  }`}
-                >
-                  <div className="w-12 h-12 rounded-full bg-card border border-primary/20 flex items-center justify-center overflow-hidden shrink-0 relative">
-                    {m.imageUrl ? (
-                      <img src={m.imageUrl} alt={m.firstName} className="w-full h-full object-cover" />
-                    ) : (
-                      <svg viewBox="0 0 100 100" className="w-8 h-8 text-primary">
-                        <circle cx="50" cy="40" r="20" fill="currentColor" />
-                        <path d="M20,85 C20,70 30,60 50,60 C70,60 80,70 80,85" fill="currentColor" />
-                      </svg>
-                    )}
-                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-background" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-white flex items-center gap-1.5">
-                      {m.firstName}, {m.age}
-                      {m.verified && <span className="text-[10px] text-primary">✓</span>}
-                    </h4>
-                    <p className="text-[11px] text-muted line-clamp-1">{m.city}, {m.country}</p>
-                  </div>
-                </button>
-              ))
+              <ul className="divide-y divide-white/5">
+                {matches.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      onClick={() => openChat(m)}
+                      className="w-full flex items-center gap-4 px-4 py-4 hover:bg-white/3 transition text-left"
+                    >
+                      {/* Avatar */}
+                      <div className="relative shrink-0">
+                        <div className="w-14 h-14 rounded-full overflow-hidden bg-[#151F3C] border-2 border-primary/20">
+                          {m.imageUrl ? (
+                            <img src={m.imageUrl} alt={m.firstName} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <svg viewBox="0 0 100 100" className="w-8 h-8 text-primary/40">
+                                <circle cx="50" cy="38" r="22" fill="currentColor" />
+                                <path d="M16,90 C16,70 28,56 50,56 C72,56 84,70 84,90" fill="currentColor" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                        {/* Online dot */}
+                        <span className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-background" />
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="font-bold text-sm text-white">
+                            {m.firstName}, {m.age}
+                            {m.verified && <span className="ml-1 text-primary text-[10px]">✓</span>}
+                          </span>
+                          <span className="text-[10px] text-muted shrink-0">
+                            {currentLang === "es" ? "hace 1h" : "1h ago"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted truncate">{getLastMessage(m.id)}</p>
+                        <p className="text-[10px] text-muted/60 mt-0.5">📍 {m.country}</p>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-        </div>
+        )}
 
-        {/* Right chat dialogue window */}
-        <div className="flex-grow glass border border-primary/10 rounded-3xl p-4 flex flex-col justify-between min-h-[400px]">
-          {activeMatch ? (
-            <>
-              {/* Active Match Header Info */}
-              <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-card border border-primary/20 overflow-hidden flex items-center justify-center relative">
-                    {activeMatch.imageUrl ? (
-                      <img src={activeMatch.imageUrl} alt={activeMatch.firstName} className="w-full h-full object-cover" />
-                    ) : (
-                      <svg viewBox="0 0 100 100" className="w-6 h-6 text-primary">
-                        <circle cx="50" cy="40" r="20" fill="currentColor" />
-                        <path d="M20,85 C20,70 30,60 50,60 C70,60 80,70 80,85" fill="currentColor" />
-                      </svg>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white flex items-center gap-1.5 text-sm">
-                      {activeMatch.firstName} {activeMatch.lastName}
-                      {activeMatch.verified && <span className="px-1.5 py-0.5 bg-primary/20 text-primary text-[8px] font-bold rounded">VERIFIED</span>}
-                    </h3>
-                    <p className="text-[10px] text-green-400 font-medium">● {t("chat.online")}</p>
-                  </div>
-                </div>
+        {/* ── ACTIVE CHAT ── */}
+        {!showList && activeMatch && (
+          <div className="flex flex-col flex-1 overflow-hidden">
+            {/* Chat header */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-[#0D1530]/80 backdrop-blur-sm">
+              <button
+                onClick={() => { setShowList(true); setActiveMatch(null); }}
+                className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-muted hover:text-white transition shrink-0"
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
 
-                <div className="flex items-center space-x-2">
-                  <button className="p-2 bg-white/5 rounded-full hover:bg-white/10 text-xs text-primary" title="Call - TODO">📞</button>
-                  <button className="p-2 bg-white/5 rounded-full hover:bg-white/10 text-xs text-secondary" title="Video call - TODO">📹</button>
-                </div>
-              </div>
-
-              {/* Message Streams */}
-              <div className="flex-grow overflow-y-auto my-4 space-y-3 px-2 max-h-[350px]">
-                {activeMessages.map((msg) => {
-                  const isMine = currentUser && msg.senderId === currentUser.id;
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-xs font-medium shadow-sm leading-relaxed ${
-                          isMine
-                            ? "bg-premium-gold text-background rounded-tr-none"
-                            : "bg-[#151F3C] text-white rounded-tl-none border border-white/5"
-                        }`}
-                      >
-                        <p>{msg.text}</p>
-                        <span className={`block text-[9px] text-right mt-1 opacity-70`}>
-                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {isTyping && (
-                  <div className="flex justify-start">
-                    <div className="bg-[#151F3C] text-muted text-xs font-semibold px-4 py-2.5 rounded-2xl rounded-tl-none italic animate-pulse">
-                      {activeMatch.firstName} is {t("chat.typing")}
-                    </div>
+              <div className="w-10 h-10 rounded-full overflow-hidden bg-[#151F3C] border border-primary/20 shrink-0">
+                {activeMatch.imageUrl ? (
+                  <img src={activeMatch.imageUrl} alt={activeMatch.firstName} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <svg viewBox="0 0 100 100" className="w-6 h-6 text-primary/40">
+                      <circle cx="50" cy="38" r="22" fill="currentColor" />
+                      <path d="M16,90 C16,70 28,56 50,56 C72,56 84,70 84,90" fill="currentColor" />
+                    </svg>
                   </div>
                 )}
-                <div ref={messagesEndRef} />
               </div>
 
-              {/* Message Typing Box */}
-              <form onSubmit={handleSendMessage} className="flex gap-2 pt-2 border-t border-white/5">
-                <input
-                  type="text"
-                  value={typedMessage}
-                  onChange={(e) => setTypedMessage(e.target.value)}
-                  className="flex-grow px-4 py-3 bg-[#0A1128] border border-primary/20 focus:border-primary focus:outline-none rounded-xl text-white text-xs"
-                  placeholder={t("chat.placeholder")}
-                />
-                
-                {/* Media Attachment Placeholders */}
-                <button
-                  type="button"
-                  className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs"
-                  title="Attach Photo (TODO)"
-                >
-                  🖼️
-                </button>
-                <button
-                  type="button"
-                  className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs"
-                  title="Send Audio (TODO)"
-                >
-                  🎙️
-                </button>
-
-                <button
-                  type="submit"
-                  className="px-6 bg-premium-gold text-background font-bold rounded-xl text-xs hover:opacity-90 transition shadow-md"
-                >
-                  {t("common.send")}
-                </button>
-              </form>
-            </>
-          ) : (
-            <div className="flex-grow flex flex-col items-center justify-center space-y-3 text-center">
-              <span className="text-4xl">💬</span>
-              <h3 className="font-bold text-white">{t("chat.title")}</h3>
-              <p className="text-xs text-muted max-w-xs">{t("chat.noMessages")}</p>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm text-white truncate">
+                  {activeMatch.firstName}
+                  {activeMatch.verified && <span className="ml-1 text-primary text-[10px]">✓</span>}
+                </p>
+                <p className="text-[10px] text-green-400 font-medium">● {t("chat.online")}</p>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+              {activeMessages.map((msg) => {
+                const isMine = currentUser && msg.senderId === currentUser.id;
+                return (
+                  <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                    {!isMine && (
+                      <div className="w-7 h-7 rounded-full overflow-hidden bg-[#151F3C] border border-primary/20 mr-2 shrink-0 self-end">
+                        {activeMatch.imageUrl ? (
+                          <img src={activeMatch.imageUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-primary/10 flex items-center justify-center text-[8px] text-primary">👤</div>
+                        )}
+                      </div>
+                    )}
+                    <div
+                      className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed shadow-sm ${
+                        isMine
+                          ? "text-background rounded-tr-none"
+                          : "bg-[#151F3C] text-white rounded-tl-none border border-white/5"
+                      }`}
+                      style={isMine ? { background: "linear-gradient(135deg, #D4A373, #FF6B8B)" } : {}}
+                    >
+                      <p>{msg.text}</p>
+                      <span className="block text-[9px] text-right mt-1 opacity-60">
+                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        {isMine && " ✓✓"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {isTyping && (
+                <div className="flex justify-start items-end gap-2">
+                  <div className="w-7 h-7 rounded-full overflow-hidden bg-[#151F3C] border border-primary/20 shrink-0">
+                    {activeMatch.imageUrl && <img src={activeMatch.imageUrl} alt="" className="w-full h-full object-cover" />}
+                  </div>
+                  <div className="bg-[#151F3C] border border-white/5 px-4 py-3 rounded-2xl rounded-tl-none flex gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            <form onSubmit={handleSend} className="flex gap-2 px-4 py-3 border-t border-white/10 bg-[#0D1530]/80 backdrop-blur-sm">
+              <button type="button" className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-muted hover:bg-white/10 transition text-base">
+                🖼️
+              </button>
+              <input
+                type="text"
+                value={typedMessage}
+                onChange={(e) => setTypedMessage(e.target.value)}
+                className="flex-1 px-4 py-2.5 bg-[#0A1128] border border-primary/20 focus:border-primary focus:outline-none rounded-2xl text-white text-sm"
+                placeholder={t("chat.placeholder")}
+                autoComplete="off"
+              />
+              <button
+                type="submit"
+                disabled={!typedMessage.trim()}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-background font-bold disabled:opacity-40 transition hover:scale-105"
+                style={{ background: "linear-gradient(135deg, #D4A373, #FF6B8B)" }}
+              >
+                <svg viewBox="0 0 24 24" className="w-5 h-5 rotate-90" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+            </form>
+          </div>
+        )}
       </main>
 
-      {/* Basic Tab Bar for Mobile App Viewports */}
-      <footer className="w-full glass border-t border-primary/10 p-2 sm:hidden z-20">
-        <div className="flex justify-around text-muted text-xs">
-          <Link href={`/${currentLang}/dashboard`} className="flex flex-col items-center py-1">
-            <span>🎴</span>
-            <span>{currentLang === "es" ? "Inicio" : (currentLang === "ru" ? "Главная" : "Home")}</span>
-          </Link>
-          <Link href={`/${currentLang}/chat`} className="flex flex-col items-center py-1 text-primary">
-            <span>💬</span>
-            <span>{currentLang === "es" ? "Chat" : (currentLang === "ru" ? "Чат" : "Chat")}</span>
-          </Link>
-          <Link href={`/${currentLang}/profile`} className="flex flex-col items-center py-1">
-            <span>👤</span>
-            <span>{currentLang === "es" ? "Perfil" : (currentLang === "ru" ? "Профиль" : "Profile")}</span>
-          </Link>
-          <button onClick={handleLogout} className="flex flex-col items-center py-1 text-red-400">
-            <span>🚪</span>
-            <span>{currentLang === "es" ? "Salir" : (currentLang === "ru" ? "Выйти" : "Logout")}</span>
-          </button>
-        </div>
-      </footer>
-
-      <footer className="w-full py-6 text-center text-xs text-muted border-t border-white/5 bg-background relative z-10 hidden sm:block">
-        <p>© 2026 Veloura Inc. All rights reserved.</p>
-      </footer>
+      <MobileBottomNav currentLang={currentLang} active="chat" />
     </div>
   );
 }

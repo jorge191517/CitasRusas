@@ -15,17 +15,28 @@ export default function LandingHeader({ currentLang }: LandingHeaderProps) {
   const [authed, setAuthed] = useState<boolean | null>(null); // null = loading
 
   useEffect(() => {
-    // Check local session first (fast)
+    // Check local session first (fast path for WebView/Capacitor)
     const stored = localStorage.getItem("veloura_user");
     if (stored) {
       setAuthed(true);
+      // Auto-redirect to dashboard if user lands on the home page
+      const isHomePage = window.location.pathname === `/${currentLang}` || window.location.pathname === `/${currentLang}/`;
+      if (isHomePage) {
+        window.location.href = `/${currentLang}/dashboard`;
+      }
       return;
     }
     // Fallback: check Supabase session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setAuthed(!!session);
+      if (session) {
+        const isHomePage = window.location.pathname === `/${currentLang}` || window.location.pathname === `/${currentLang}/`;
+        if (isHomePage) {
+          window.location.href = `/${currentLang}/dashboard`;
+        }
+      }
     });
-  }, []);
+  }, [currentLang]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut().catch(() => {});

@@ -1,14 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase/client";
 import { Locale, getTranslation } from "../../../lib/i18n";
 
 export default function LoginPage() {
   const params = useParams();
-  const router = useRouter();
   const currentLang = (params.lang as Locale) || "es";
   const t = getTranslation(currentLang);
 
@@ -25,53 +24,60 @@ export default function LoginPage() {
     setSuccessMsg("");
 
     try {
-      if (process.env.NODE_ENV === "development") {
-        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-          console.error("DEBUG DEV ALERT: Supabase Public Env Variables are missing!");
-        }
-      }
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-      // Real Supabase Auth Flow
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       if (data?.session) {
-        // Set session token in cookies for Middleware path validation checks
-        document.cookie = `veloura-auth-session=${data.session.access_token}; path=/; max-age=${data.session.expires_in}; SameSite=Lax; Secure`;
-        
-        // Save basic user details to local storage
-        localStorage.setItem(
-          "veloura_user",
-          JSON.stringify({
-            id: data.user.id,
-            email: data.user.email,
-            role: "USER"
-          })
-        );
+        // Set cookie for middleware
+        document.cookie = `veloura-auth-session=${data.session.access_token}; path=/; max-age=${data.session.expires_in}; SameSite=Lax`;
+
+        // Try to fetch profile from API to get profileCompleted status
+        let profileCompleted = false;
+        let profileData: any = null;
+        try {
+          const res = await fetch("/api/profile", {
+            headers: { Authorization: `Bearer ${data.session.access_token}` },
+          });
+          if (res.ok) {
+            profileData = await res.json();
+            profileCompleted = profileData?.profile?.profileCompleted === true;
+          }
+        } catch (_) {}
+
+        // Save to localStorage
+        const userObj = {
+          id: data.user.id,
+          email: data.user.email,
+          role: profileData?.role || "USER",
+          profile: {
+            ...(profileData?.profile || {}),
+            firstName: profileData?.profile?.firstName || data.user.user_metadata?.firstName || "",
+            birthDate: profileData?.profile?.birthDate || data.user.user_metadata?.birthDate || "",
+            gender: profileData?.profile?.gender || data.user.user_metadata?.gender || "",
+            country: profileData?.profile?.country || data.user.user_metadata?.country || "",
+            profileCompleted,
+          },
+        };
+        localStorage.setItem("veloura_user", JSON.stringify(userObj));
 
         setSuccessMsg(t("auth.successLogin"));
-        setTimeout(() => {
-          // Use window.location.href to force absolute state reloading in WebView / Capacitor
-          window.location.href = `/${currentLang}/dashboard`;
-        }, 1000);
+
+        // Redirect based on profileCompleted
+        window.location.href = profileCompleted
+          ? `/${currentLang}/dashboard`
+          : `/${currentLang}/onboarding`;
       }
     } catch (err: any) {
-      console.error("Auth error details:", err);
+      console.error("Auth error:", err);
       setErrorMsg(`${t("auth.errorAuth")}: ${err.message || err}`);
-    } finally {
       setLoading(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col justify-center items-center px-4 relative overflow-hidden">
-      {/* Volver top left link */}
+      {/* Back */}
       <div className="absolute top-6 left-6 z-20">
         <Link
           href={`/${currentLang}`}
@@ -87,8 +93,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md glass p-8 rounded-[32px] border border-primary/20 text-center space-y-6 relative z-10">
         <Link href={`/${currentLang}`} className="inline-flex items-center space-x-2 mb-4">
           <svg viewBox="0 0 512 512" className="w-8 h-8 text-primary" fill="currentColor">
-            <path d="M256,120 C230,80 180,80 150,110 C120,140 120,190 150,220 L256,330 L362,220 C392,190 392,140 362,110 C332,80 282,80 256,120 Z" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M256,170 C240,140 200,140 180,160 C160,180 160,210 180,230 L256,305 L332,230 C352,210 352,180 332,160 C312,140 272,140 256,170 Z" fill="none" stroke="#FF6B8B" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M256,120 C230,80 180,80 150,110 C120,140 120,190 150,220 L256,330 L362,220 C392,190 392,140 362,110 C332,80 282,80 256,120 Z" fill="none" stroke="currentColor" strokeWidth="32" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M256,170 C240,140 200,140 180,160 C160,180 160,210 180,230 L256,305 L332,230 C352,210 352,180 332,160 C312,140 272,140 256,170 Z" fill="none" stroke="#FF6B8B" strokeWidth="20" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <span className="text-xl font-bold tracking-widest text-primary font-serif">VELOURA</span>
         </Link>
@@ -105,6 +111,7 @@ export default function LoginPage() {
               className="w-full px-4 py-3 bg-[#0A1128]/80 border border-primary/20 rounded-xl text-white focus:outline-none focus:border-primary text-sm"
               placeholder="name@example.com"
               required
+              autoComplete="email"
             />
           </div>
           <div>
@@ -116,6 +123,7 @@ export default function LoginPage() {
               className="w-full px-4 py-3 bg-[#0A1128]/80 border border-primary/20 rounded-xl text-white focus:outline-none focus:border-primary text-sm"
               placeholder="••••••••"
               required
+              autoComplete="current-password"
             />
           </div>
 
@@ -125,13 +133,14 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-premium-gold text-background font-bold rounded-xl hover:opacity-90 transition duration-300 disabled:opacity-50 text-sm shadow-md"
+            className="w-full py-3 font-bold rounded-xl hover:opacity-90 transition disabled:opacity-50 text-sm shadow-md text-background"
+            style={{ background: loading ? "#888" : "linear-gradient(135deg, #D4A373, #FF6B8B)" }}
           >
             {loading ? t("common.loading") : t("auth.signIn")}
           </button>
         </form>
 
-        <div className="flex flex-col space-y-2 pt-2">
+        <div className="flex flex-col space-y-2 pt-2 border-t border-white/5">
           <Link href={`/${currentLang}/register`} className="text-xs text-[#FF6B8B] hover:underline">
             {t("auth.noAccount")}
           </Link>

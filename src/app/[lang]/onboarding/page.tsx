@@ -242,11 +242,11 @@ export default function OnboardingPage() {
         languages,
         mainPhotoUrl,
         videoIntroUrl: videoUrl || undefined,
-        profileCompleted: true,
-        photos: [mainPhotoUrl, ...galleryUrls],
+        profileCompleted: true,  // ← Mark as completed
+        photos: [mainPhotoUrl, ...galleryUrls].filter(Boolean),
       };
 
-      // Update localStorage
+      // Update localStorage — mark profileCompleted true
       const stored = localStorage.getItem("veloura_user");
       if (stored) {
         const u = JSON.parse(stored);
@@ -255,6 +255,7 @@ export default function OnboardingPage() {
           profile: {
             ...(u.profile || {}),
             ...profilePayload,
+            profileCompleted: true,
           }
         };
         localStorage.setItem("veloura_user", JSON.stringify(updated));
@@ -272,7 +273,7 @@ export default function OnboardingPage() {
         body: JSON.stringify(profilePayload),
       }).catch(err => console.warn("Profile PATCH skipped:", err));
 
-      // Redirect to dashboard
+      // ✅ Redirect to DASHBOARD (not landing)
       window.location.href = `/${currentLang}/dashboard`;
     } catch (err: any) {
       console.error("Onboarding finish error:", err);

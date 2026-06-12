@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../lib/db";
 import { createClient } from "../../../lib/supabase/server";
 import { likeSchema } from "../../../lib/validation";
+import { mockProfiles } from "../../../lib/mockData";
 
 export const dynamic = "force-dynamic";
 
@@ -217,7 +218,7 @@ export async function POST(req: NextRequest) {
 
     // 3. Register receiver in DB if it is a mock profile or ensure user exists if real
     if (receiverId.startsWith("mock-")) {
-      const mockProf = (await import("../../../lib/mockData")).mockProfiles.find(p => p.id === receiverId);
+      const mockProf = mockProfiles.find(p => p.id === receiverId);
       await prisma.user.upsert({
         where: { id: receiverId },
         update: {},

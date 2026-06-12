@@ -277,7 +277,8 @@ export default function DashboardPage() {
 
     setTimeout(() => {
       setSwipeDir(null);
-      setCurrentIndex((prev) => prev + 1);
+      // Remueve el perfil de la lista local para que no reaparezca al cambiar de pestaña
+      setProfiles(prev => prev.filter(p => p.id !== profile.id));
     }, 300);
   };
 

@@ -50,7 +50,17 @@ export async function GET(req: NextRequest) {
     });
 
     if (!dbUser) {
-      return NextResponse.json({ error: "User not found in database" }, { status: 404 });
+      // User exists in Supabase Auth but not yet in our DB (registered but never completed onboarding)
+      // Return null profile with profileCompleted=false — do NOT return 404
+      // This prevents the dashboard from treating a missing DB row as an error
+      return NextResponse.json({
+        success: true,
+        role: "USER",
+        profile: null,
+        subscription: null,
+        likesCount: 0,
+        blockedUserIds: []
+      });
     }
 
     const galleryPhotos = dbUser.photos.filter(p => !p.isPrimary).map(p => p.url);

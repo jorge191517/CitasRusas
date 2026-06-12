@@ -60,12 +60,14 @@ export default function DashboardPage() {
 
       let profileCompleted = false;
       let profileData: any = null;
+      let apiCallSucceeded = false;
       try {
         const res = await fetch("/api/profile", {
           headers: { Authorization: `Bearer ${currentSession.access_token}` },
         });
         if (res.ok) {
           profileData = await res.json();
+          apiCallSucceeded = true;
           profileCompleted = profileData?.profile?.profileCompleted === true;
           setLikesCount(profileData?.likesCount || 0);
           setIsVip(profileData?.subscription?.tier === "PREMIUM" && profileData?.subscription?.isActive);
@@ -83,8 +85,17 @@ export default function DashboardPage() {
           } catch (mErr) {
             console.error("Error fetching db matches:", mErr);
           }
+        } else if (res.status === 404) {
+          // User exists in Supabase Auth but has no DB profile yet
+          // Do NOT redirect to onboarding — let dashboard show normally
+          // The API will auto-create the user record on PATCH (onboarding save)
+          apiCallSucceeded = true;
+          profileCompleted = false; // no profile yet, but we handle this below
         }
-      } catch (_) {}
+      } catch (_) {
+        // Network error — assume profile may exist, do NOT redirect
+        apiCallSucceeded = false;
+      }
 
       user = {
         id: currentSession.user.id,
@@ -100,8 +111,17 @@ export default function DashboardPage() {
       localStorage.setItem("veloura_user", JSON.stringify(user));
       setCurrentUser(user);
 
-      if (user.profile && user.profile.profileCompleted === false) {
-        window.location.href = `/${currentLang}/onboarding`;
+      // CRITICAL FIX:
+      // Only redirect to onboarding if ALL of these are true:
+      // 1. The API call actually succeeded (no network error)
+      // 2. A profile record EXISTS in DB (profileData?.profile is not null)
+      // 3. profileCompleted is explicitly false
+      // 
+      // If the API failed or user has no profile row yet → show dashboard normally
+      // (They will be redirected via auth-redirect on next app open)
+      const hasExistingProfile = apiCallSucceeded && profileData?.profile !== null && profileData?.profile !== undefined;
+      if (hasExistingProfile && profileCompleted === false) {
+        window.location.replace(`/${currentLang}/onboarding`);
         return;
       }
 

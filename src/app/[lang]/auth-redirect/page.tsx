@@ -23,43 +23,84 @@ export default function AuthRedirectPage() {
   useEffect(() => {
     const run = async () => {
       try {
-        // 1. Wait a tick so Supabase can restore session from localStorage
-        await new Promise((r) => setTimeout(r, 300));
+        // 1. Wait for Supabase to restore session from localStorage (IndexedDB in WebView)
+        await new Promise((r) => setTimeout(r, 500));
 
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        // 2. Try to get session — also attempt refresh if expired
+        let session = null;
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          session = sessionData?.session;
+
+          // If session exists but token might be expired, try refresh
+          if (session) {
+            const expiresAt = session.expires_at || 0;
+            const now = Math.floor(Date.now() / 1000);
+            if (expiresAt - now < 60) {
+              // Token expires in less than 60 seconds — refresh it
+              const { data: refreshData } = await supabase.auth.refreshSession();
+              if (refreshData?.session) {
+                session = refreshData.session;
+              }
+            }
+          }
+        } catch (sessionErr) {
+          console.warn("[auth-redirect] session error:", sessionErr);
+        }
 
         if (!session) {
-          // No session — go to dashboard in guest mode
+          // No session — go to dashboard in guest mode (NOT login)
           window.location.replace(`/${lang}/dashboard`);
           return;
         }
 
         setStatus("redirecting");
 
-        // 2. Check profile completion
+        // 3. Sync cookie so middleware works on subsequent server navigations
+        try {
+          document.cookie = `veloura-auth-session=${session.access_token}; path=/; max-age=${session.expires_in ?? 3600}; SameSite=Lax`;
+        } catch (_) {}
+
+        // 4. Check profile completion via API
         let profileCompleted = false;
+        let profileExists = false;
+
         try {
           const res = await fetch("/api/profile", {
             headers: { Authorization: `Bearer ${session.access_token}` },
+            cache: "no-store",
           });
+
           if (res.ok) {
             const data = await res.json();
-            profileCompleted = data?.profile?.profileCompleted === true;
+            // profile=null means user exists in Auth but has no DB profile yet
+            if (data?.profile !== null && data?.profile !== undefined) {
+              profileExists = true;
+              profileCompleted = data?.profile?.profileCompleted === true;
+            } else {
+              // No profile in DB → go to onboarding
+              profileExists = false;
+              profileCompleted = false;
+            }
           }
-        } catch (_) {}
+          // If API call fails → assume dashboard (safe default)
+        } catch (_) {
+          // Network failure → go to dashboard, don't block user
+          profileCompleted = true;
+        }
 
-        // 3. Sync cookie so middleware works on subsequent navigations
-        document.cookie = `veloura-auth-session=${session.access_token}; path=/; max-age=${session.expires_in}; SameSite=Lax`;
-
-        const target = profileCompleted
-          ? `/${lang}/dashboard`
-          : `/${lang}/onboarding`;
+        // 5. Decide target
+        let target: string;
+        if (!profileExists || !profileCompleted) {
+          target = `/${lang}/onboarding`;
+        } else {
+          target = `/${lang}/dashboard`;
+        }
 
         window.location.replace(target);
       } catch (err) {
-        console.error("auth-redirect error:", err);
+        console.error("[auth-redirect] error:", err);
+        // On any unexpected error, go to login
         window.location.replace(`/${lang}/login`);
       }
     };

@@ -350,19 +350,18 @@ export async function PATCH(req: NextRequest) {
       // Use exclusively the Supabase ID
       const resolvedUserId = activeUserId;
 
-      // Check if User already exists by Supabase ID
-      const userById = await prisma.user.findUnique({ where: { id: activeUserId } });
-
-      if (!userById) {
-        // Create user with current Supabase ID
-        await prisma.user.create({
-          data: {
-            id: activeUserId,
-            email: activeEmail,
-            role: "USER",
-          },
-        });
-      }
+      // Upsert User with current Supabase ID to ensure it exists
+      await prisma.user.upsert({
+        where: { id: resolvedUserId },
+        update: {
+          email: activeEmail,
+        },
+        create: {
+          id: resolvedUserId,
+          email: activeEmail,
+          role: "USER",
+        },
+      });
 
       // ── Step 2: Upsert Profile using resolvedUserId ───────────────────────
       const updatedProfile = await prisma.profile.upsert({

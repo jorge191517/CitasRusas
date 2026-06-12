@@ -74,6 +74,20 @@ export async function POST(req: NextRequest) {
 
     const { conversationId, text, photoUrl, audioUrl } = messageValidation.data;
 
+    // Enforce multimedia restrictions for non-VIP real users
+    if (senderId && !senderId.startsWith("mock-")) {
+      const hasMultimedia = photoUrl || audioUrl;
+      if (hasMultimedia) {
+        const userSub = await prisma.subscription.findUnique({
+          where: { userId: senderId }
+        });
+        const isVip = userSub?.tier === "PREMIUM" && userSub?.isActive;
+        if (!isVip) {
+          return NextResponse.json({ error: "Las fotos, vídeos y audios están reservados para usuarios VIP." }, { status: 403 });
+        }
+      }
+    }
+
     // Verify sender is participant of the conversation
     const participant = await prisma.conversationParticipant.findUnique({
       where: {

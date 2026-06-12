@@ -191,8 +191,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Interaction blocked" }, { status: 400 });
     }
 
-    // 2. Check 10 likes limit for FREE users
-    if (type === "LIKE" || type === "SUPER_LIKE") {
+    // 2. Check 10 likes limit for FREE users (bypass if forceMatch is true)
+    if ((type === "LIKE" || type === "SUPER_LIKE") && body.forceMatch !== true) {
       const userSub = await prisma.subscription.findUnique({
         where: { userId: authUserId }
       });
@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Register receiver in DB if it is a mock profile
+    // 3. Register receiver in DB if it is a mock profile or ensure user exists if real
     if (receiverId.startsWith("mock-")) {
       const mockProf = (await import("../../../lib/mockData")).mockProfiles.find(p => p.id === receiverId);
       await prisma.user.upsert({
@@ -235,6 +235,16 @@ export async function POST(req: NextRequest) {
               profileCompleted: true
             }
           }
+        }
+      });
+    } else {
+      await prisma.user.upsert({
+        where: { id: receiverId },
+        update: {},
+        create: {
+          id: receiverId,
+          email: `${receiverId}@veloura.user`,
+          role: "USER"
         }
       });
     }

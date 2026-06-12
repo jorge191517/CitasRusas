@@ -142,37 +142,56 @@ export default function DashboardPage() {
       setShowAuthModal(true);
       return;
     }
-    const match = dbMatches.find((m) => m.id === profileId);
-    if (match && match.conversationId) {
-      window.location.href = `/${currentLang}/chat?conversationId=${match.conversationId}`;
-    } else {
-      try {
-        const res = await fetch("/api/matches", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${session.access_token}`
-          },
-          body: JSON.stringify({
-            receiverId: profileId,
-            type: "LIKE",
-            forceMatch: true
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.isMatch && data.match && data.match.conversationId) {
-            window.location.href = `/${currentLang}/chat?conversationId=${data.match.conversationId}`;
-          } else {
-            alert("Error al iniciar el chat.");
-          }
-        } else {
-          alert("Error al iniciar el chat.");
+
+    // Check if there's already a match with this user (and thus a conversationId)
+    const existingMatch = dbMatches.find((m) => m.id === profileId);
+
+    if (existingMatch && existingMatch.conversationId) {
+      // ✅ Real match with conversation — open chat directly
+      window.location.href = `/${currentLang}/chat?conversationId=${existingMatch.conversationId}`;
+      return;
+    }
+
+    // No existing match yet—try to create one via forceMatch (works for real users and mocks in DB)
+    try {
+      const res = await fetch("/api/matches", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          receiverId: profileId,
+          type: "LIKE",
+          forceMatch: true
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.isMatch && data.match && data.match.conversationId) {
+          window.location.href = `/${currentLang}/chat?conversationId=${data.match.conversationId}`;
+          return;
         }
-      } catch (err) {
-        console.error("Error direct messaging:", err);
-        alert("Error al iniciar el chat.");
       }
+
+      // If we get here, no conversation was created
+      const resData = res.ok ? await res.json().catch(() => ({})) : {};
+      if (res.status === 403) {
+        alert(currentLang === "es"
+          ? "Has alcanzado el límite de likes. Consigue VIP para continuar."
+          : "You've reached the like limit. Get VIP to continue.");
+      } else {
+        // For mock profiles or users without DB records, show friendly message
+        alert(currentLang === "es"
+          ? "Este perfil aún no está disponible para chat. \nDa like para intentar un match primero."
+          : "This profile is not available for chat yet. \nLike them first to try to match.");
+      }
+    } catch (err) {
+      console.error("Error opening chat:", err);
+      alert(currentLang === "es"
+        ? "No se pudo iniciar el chat. Inténtalo de nuevo."
+        : "Could not start chat. Please try again.");
     }
   };
 

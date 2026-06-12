@@ -140,6 +140,17 @@ export async function POST(req: NextRequest) {
     }
     const authUserId = user.id;
 
+    // Ensure current user exists in PostgreSQL User table
+    await prisma.user.upsert({
+      where: { id: authUserId },
+      update: {},
+      create: {
+        id: authUserId,
+        email: user.email || `${authUserId}@veloura.user`,
+        role: "USER"
+      }
+    });
+
     const body = await req.json();
     
     // Validate using Zod
@@ -236,20 +247,32 @@ export async function POST(req: NextRequest) {
         create: { senderId: receiverId, receiverId: authUserId, type: "LIKE" }
       });
 
-      const match = await prisma.match.upsert({
-        where: {
-          user1Id_user2Id: { user1Id: u1, user2Id: u2 }
-        },
-        update: {},
-        create: {
-          user1Id: u1,
-          user2Id: u2,
-          conversation: {
-            create: {}
-          }
-        },
+      // Try to find or create the match
+      let match: any = await prisma.match.findUnique({
+        where: { user1Id_user2Id: { user1Id: u1, user2Id: u2 } },
         include: { conversation: true }
       });
+
+      if (!match) {
+        // Create match with conversation
+        const newConv = await prisma.conversation.create({ data: {} });
+        match = await prisma.match.create({
+          data: {
+            user1Id: u1,
+            user2Id: u2,
+            conversationId: newConv.id
+          },
+          include: { conversation: true }
+        });
+      } else if (!match.conversationId) {
+        // Match exists but has no conversation — create one and link it
+        const newConv = await prisma.conversation.create({ data: {} });
+        match = await prisma.match.update({
+          where: { id: match.id },
+          data: { conversationId: newConv.id },
+          include: { conversation: true }
+        });
+      }
 
       if (match.conversationId) {
         await prisma.conversationParticipant.upsert({
@@ -267,6 +290,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ success: true, match, isMatch: true });
     }
+
 
     // 4. Create or update Swipe/Like record
     const swipe = await prisma.like.upsert({
@@ -306,20 +330,29 @@ export async function POST(req: NextRequest) {
         const u1 = authUserId < receiverId ? authUserId : receiverId;
         const u2 = authUserId < receiverId ? receiverId : authUserId;
 
-        const match = await prisma.match.upsert({
-          where: {
-            user1Id_user2Id: { user1Id: u1, user2Id: u2 }
-          },
-          update: {},
-          create: {
-            user1Id: u1,
-            user2Id: u2,
-            conversation: {
-              create: {}
-            }
-          },
+        let match: any = await prisma.match.findUnique({
+          where: { user1Id_user2Id: { user1Id: u1, user2Id: u2 } },
           include: { conversation: true }
         });
+
+        if (!match) {
+          const newConv = await prisma.conversation.create({ data: {} });
+          match = await prisma.match.create({
+            data: {
+              user1Id: u1,
+              user2Id: u2,
+              conversationId: newConv.id
+            },
+            include: { conversation: true }
+          });
+        } else if (!match.conversationId) {
+          const newConv = await prisma.conversation.create({ data: {} });
+          match = await prisma.match.update({
+            where: { id: match.id },
+            data: { conversationId: newConv.id },
+            include: { conversation: true }
+          });
+        }
 
         // Insert conversation participants
         if (match.conversationId) {

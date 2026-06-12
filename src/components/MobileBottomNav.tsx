@@ -30,7 +30,8 @@ export default function MobileBottomNav({ currentLang, active }: MobileBottomNav
         });
         if (res.ok) {
           const data = await res.json();
-          setUnreadChats(data.matches?.length || 0);
+          const activeMatches = (data.matches || []).filter((m: any) => m.conversationId);
+          setUnreadChats(activeMatches.length);
           setPendingLikes(data.receivedLikes?.length || 0);
         }
       } catch (err) {

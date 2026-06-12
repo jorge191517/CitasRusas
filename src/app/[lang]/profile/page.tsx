@@ -15,7 +15,10 @@ export default function ProfilePage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  // Real metrics from DB (not mocked)
   const [matchCount, setMatchCount] = useState(0);
+  const [likesReceivedCount, setLikesReceivedCount] = useState(0);
+  const [visitsCount] = useState(0); // No visits table yet — always 0
 
   // Editable fields
   const [firstName, setFirstName] = useState("");
@@ -60,7 +63,7 @@ export default function ProfilePage() {
           } catch (_) {}
         }
 
-        // 3. Fetch real data from API
+        // 3. Fetch real profile data from API (always from DB, never from cache alone)
         try {
           const res = await fetch("/api/profile", {
             headers: { Authorization: `Bearer ${session.access_token}` },
@@ -73,13 +76,25 @@ export default function ProfilePage() {
             if (process.env.NODE_ENV === "development") {
               console.log("[PROFILE] API response profileCompleted:", p.profileCompleted);
               console.log("[PROFILE] API response mainPhotoUrl:", p.mainPhotoUrl);
+              console.log("[PROFILE] API response allPhotos:", p.allPhotos);
             }
+
+            // Resolve main photo: mainPhotoUrl OR first isPrimary photo OR first photo
+            const resolvedMain = p.mainPhotoUrl ||
+              (p.allPhotos?.find((ph: any) => ph.isPrimary))?.url ||
+              (p.allPhotos?.[0])?.url ||
+              "";
+
+            // Gallery = all non-primary photos from allPhotos
+            const resolvedGallery: string[] = (p.allPhotos || [])
+              .filter((ph: any) => !ph.isPrimary && ph.url && ph.url.startsWith("http"))
+              .map((ph: any) => ph.url);
 
             const userObj = {
               id: session.user.id,
               email: session.user.email,
               role: data.role || "USER",
-              profile: p,
+              profile: { ...p, mainPhotoUrl: resolvedMain, photos: resolvedGallery },
             };
             setCurrentUser(userObj);
             setFirstName(p.firstName || "");
@@ -89,8 +104,8 @@ export default function ProfilePage() {
             setInterests(p.interests || []);
             setHobbies(p.hobbies || []);
             setLookingFor(p.lookingFor || "");
-            setMainPhotoUrl(p.mainPhotoUrl || "");
-            setPhotos(p.photos || []);
+            setMainPhotoUrl(resolvedMain);
+            setPhotos(resolvedGallery);
 
             // Update localStorage cache with real API data
             try {
@@ -102,7 +117,19 @@ export default function ProfilePage() {
           // Keep localStorage data as fallback
         }
 
-        setMatchCount(JSON.parse(localStorage.getItem("veloura_matches") || "[]").length);
+        // 4. Fetch real metrics from /api/matches
+        try {
+          const matchRes = await fetch("/api/matches", {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+            cache: "no-store",
+          });
+          if (matchRes.ok) {
+            const matchData = await matchRes.json();
+            setMatchCount((matchData.matches || []).length);
+            setLikesReceivedCount((matchData.receivedLikes || []).length);
+          }
+        } catch (_) {}
+        // Note: visitsCount has no table yet, stays at 0
       } catch (err) {
         console.error("Profile load error:", err);
         window.location.replace(`/${currentLang}/login`);
@@ -121,7 +148,7 @@ export default function ProfilePage() {
     return age;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!currentUser) return;
     const updatedProfile = {
       ...(currentUser.profile || {}),
@@ -129,18 +156,41 @@ export default function ProfilePage() {
       interests, hobbies, lookingFor,
       mainPhotoUrl, photos,
     };
-    const updated = { ...currentUser, profile: updatedProfile };
-    localStorage.setItem("veloura_user", JSON.stringify(updated));
-    setCurrentUser(updated);
+    
     setEditing(false);
     setSuccessMsg(currentLang === "es" ? "Perfil guardado ✓" : "Profile saved ✓");
     setTimeout(() => setSuccessMsg(""), 3000);
 
-    fetch("/api/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updatedProfile),
-    }).catch(() => {});
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (session) headers["Authorization"] = `Bearer ${session.access_token}`;
+
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(updatedProfile),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.profile) {
+          setPhotos(data.profile.photos || []);
+          setMainPhotoUrl(data.profile.mainPhotoUrl || "");
+          const updated = { 
+            ...currentUser, 
+            profile: {
+              ...currentUser.profile,
+              ...data.profile
+            }
+          };
+          localStorage.setItem("veloura_user", JSON.stringify(updated));
+          setCurrentUser(updated);
+        }
+      }
+    } catch (err) {
+      console.error("Error saving profile:", err);
+    }
   };
 
   const [uploading, setUploading] = useState(false);
@@ -201,9 +251,6 @@ export default function ProfilePage() {
           mainPhotoUrl: newMain,
           photos: newPhotos,
         };
-        const updated = { ...currentUser, profile: updatedProfile };
-        localStorage.setItem("veloura_user", JSON.stringify(updated));
-        setCurrentUser(updated);
 
         // Fetch patch
         const { data: { session } } = await supabase.auth.getSession();
@@ -221,6 +268,15 @@ export default function ProfilePage() {
           if (data.profile) {
             setPhotos(data.profile.photos || []);
             setMainPhotoUrl(data.profile.mainPhotoUrl || "");
+            const updated = { 
+              ...currentUser, 
+              profile: {
+                ...currentUser.profile,
+                ...data.profile
+              }
+            };
+            localStorage.setItem("veloura_user", JSON.stringify(updated));
+            setCurrentUser(updated);
           }
         }
       }
@@ -362,9 +418,6 @@ export default function ProfilePage() {
                       mainPhotoUrl,
                       photos: newPhotos,
                     };
-                    const updated = { ...currentUser, profile: updatedProfile };
-                    localStorage.setItem("veloura_user", JSON.stringify(updated));
-                    setCurrentUser(updated);
 
                     const { data: { session } } = await supabase.auth.getSession();
                     const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -381,6 +434,15 @@ export default function ProfilePage() {
                       if (data.profile) {
                         setPhotos(data.profile.photos || []);
                         setMainPhotoUrl(data.profile.mainPhotoUrl || "");
+                        const updated = { 
+                          ...currentUser, 
+                          profile: {
+                            ...currentUser.profile,
+                            ...data.profile
+                          }
+                        };
+                        localStorage.setItem("veloura_user", JSON.stringify(updated));
+                        setCurrentUser(updated);
                       }
                     }
                   }}
@@ -405,11 +467,11 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── STATS ── */}
+        {/* ── STATS — real data from DB ── */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: currentLang === "es" ? "Visitas" : "Visits", value: "142" },
-            { label: currentLang === "es" ? "Likes" : "Likes", value: "28" },
+            { label: currentLang === "es" ? "Visitas" : "Visits", value: visitsCount.toString() },
+            { label: currentLang === "es" ? "Likes" : "Likes", value: likesReceivedCount.toString() },
             { label: "Matches", value: matchCount.toString() },
           ].map((stat) => (
             <div key={stat.label} className="glass rounded-2xl p-3 text-center border border-white/5">
@@ -564,7 +626,7 @@ export default function ProfilePage() {
         </div>
       </main>
 
-      <MobileBottomNav currentLang={currentLang} active="profile" />
+      <MobileBottomNav currentLang={currentLang} active="options" />
     </div>
   );
 }

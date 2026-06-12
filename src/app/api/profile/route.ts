@@ -59,21 +59,50 @@ export async function GET(req: NextRequest) {
         profile: null,
         subscription: null,
         likesCount: 0,
+        likesReceivedCount: 0,
         blockedUserIds: []
       });
     }
 
+    // All photos with full metadata (client will resolve main vs gallery)
+    const allPhotos = dbUser.photos.map(p => ({
+      id: p.id,
+      url: p.url,
+      isPrimary: p.isPrimary,
+      createdAt: p.createdAt,
+    }));
+
+    // Legacy: gallery photos as URL array (non-primary)
     const galleryPhotos = dbUser.photos.filter(p => !p.isPrimary).map(p => p.url);
+
+    // Resolve mainPhotoUrl fallback:
+    // 1. Profile.mainPhotoUrl
+    // 2. First isPrimary Photo
+    // 3. First Photo of any kind
+    let resolvedMainPhotoUrl = dbUser.profile?.mainPhotoUrl || null;
+    if (!resolvedMainPhotoUrl) {
+      const primaryPhoto = dbUser.photos.find(p => p.isPrimary);
+      if (primaryPhoto) resolvedMainPhotoUrl = primaryPhoto.url;
+      else if (dbUser.photos.length > 0) resolvedMainPhotoUrl = dbUser.photos[0].url;
+    }
 
     // Fetch subscription details
     const userSub = await prisma.subscription.findUnique({
       where: { userId: authUser.id }
     });
 
-    // Fetch total likes count sent by the user
+    // Fetch total likes count sent by the user (for VIP limit tracking)
     const likesCount = await prisma.like.count({
       where: {
         senderId: authUser.id,
+        type: { in: ["LIKE", "SUPER_LIKE"] }
+      }
+    });
+
+    // Fetch likes received by this user (for profile metrics)
+    const likesReceivedCount = await prisma.like.count({
+      where: {
+        receiverId: authUser.id,
         type: { in: ["LIKE", "SUPER_LIKE"] }
       }
     });
@@ -94,10 +123,13 @@ export async function GET(req: NextRequest) {
       role: dbUser.role,
       profile: dbUser.profile ? {
         ...dbUser.profile,
-        photos: galleryPhotos
+        mainPhotoUrl: resolvedMainPhotoUrl,  // guaranteed fallback chain
+        allPhotos,                            // full objects: id, url, isPrimary, createdAt
+        photos: galleryPhotos                 // legacy: string[] of non-primary URLs
       } : null,
       subscription: userSub,
       likesCount,
+      likesReceivedCount,
       blockedUserIds
     });
   } catch (err: any) {
@@ -391,28 +423,50 @@ export async function PATCH(req: NextRequest) {
         },
       });
 
-      // Clear previous photos
-      await prisma.photo.deleteMany({
-        where: { userId: resolvedUserId }
-      });
+      // Check if photos/mainPhotoUrl is actually provided in the request body
+      const rawProfile = body.profile || body;
+      const hasPhotosUpdate = (rawProfile.photos !== undefined) || (rawProfile.mainPhotoUrl !== undefined);
 
-      // Save photos in Photo table
-      if (allPhotoUrls.length > 0) {
-        await prisma.photo.createMany({
-          data: allPhotoUrls.map((url) => ({
-            userId: resolvedUserId,
-            url,
-            isPrimary: url === (validProfile.mainPhotoUrl !== undefined ? validProfile.mainPhotoUrl : updatedProfile.mainPhotoUrl),
-            isApproved: true
-          }))
+      if (hasPhotosUpdate) {
+        // Clear previous photos
+        await prisma.photo.deleteMany({
+          where: { userId: resolvedUserId }
         });
+
+        // Save photos in Photo table
+        if (allPhotoUrls.length > 0) {
+          await prisma.photo.createMany({
+            data: allPhotoUrls.map((url) => ({
+              userId: resolvedUserId,
+              url,
+              isPrimary: url === (validProfile.mainPhotoUrl !== undefined ? validProfile.mainPhotoUrl : updatedProfile.mainPhotoUrl),
+              isApproved: true
+            }))
+          });
+        }
       }
 
-      // Fetch the non-primary photos to return as gallery photos
-      const savedPhotos = await prisma.photo.findMany({
-        where: { userId: resolvedUserId, isPrimary: false },
+      // Fetch latest photos to return
+      const dbPhotos = await prisma.photo.findMany({
+        where: { userId: resolvedUserId },
         orderBy: { createdAt: "asc" }
       });
+
+      const allPhotos = dbPhotos.map(p => ({
+        id: p.id,
+        url: p.url,
+        isPrimary: p.isPrimary,
+        createdAt: p.createdAt,
+      }));
+
+      const galleryPhotos = dbPhotos.filter(p => !p.isPrimary).map(p => p.url);
+
+      let resolvedMainPhotoUrl = updatedProfile.mainPhotoUrl;
+      if (!resolvedMainPhotoUrl) {
+        const primaryPhoto = dbPhotos.find(p => p.isPrimary);
+        if (primaryPhoto) resolvedMainPhotoUrl = primaryPhoto.url;
+        else if (dbPhotos.length > 0) resolvedMainPhotoUrl = dbPhotos[0].url;
+      }
 
       // Upsert subscription if provided in body
       if (body.subscription) {
@@ -436,7 +490,9 @@ export async function PATCH(req: NextRequest) {
         success: true,
         profile: {
           ...updatedProfile,
-          photos: savedPhotos.map(p => p.url)
+          mainPhotoUrl: resolvedMainPhotoUrl,
+          allPhotos,
+          photos: galleryPhotos
         }
       });
     } catch (dbErr: any) {

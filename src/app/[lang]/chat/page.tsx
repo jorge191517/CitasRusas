@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
+import React, { useState, useEffect, useRef, Suspense } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Locale, getTranslation } from "../../../lib/i18n";
 import { DatingProfile } from "../../../components/TinderCard";
@@ -40,8 +40,10 @@ const REPLIES: Record<string, string[]> = {
   ],
 };
 
-export default function ChatPage() {
+function ChatContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
+  const targetConversationId = searchParams.get("conversationId");
   const currentLang = (params.lang as Locale) || "es";
   const t = getTranslation(currentLang);
 
@@ -113,6 +115,17 @@ export default function ChatPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeMatch, isTyping]);
+
+  // Auto-open chat if conversationId is provided in URL
+  useEffect(() => {
+    if (loadingMatches || matches.length === 0) return;
+    if (targetConversationId) {
+      const match = matches.find(m => m.conversationId === targetConversationId);
+      if (match) {
+        openChat(match);
+      }
+    }
+  }, [loadingMatches, matches, targetConversationId]);
 
   const fetchMatches = async (currSession: any) => {
     try {
@@ -796,5 +809,17 @@ export default function ChatPage() {
 
       <MobileBottomNav currentLang={currentLang} active="chat" />
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen bg-background text-foreground flex flex-col items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    }>
+      <ChatContent />
+    </Suspense>
   );
 }

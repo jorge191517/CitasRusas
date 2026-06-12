@@ -42,96 +42,99 @@ export default function DashboardPage() {
   const [session, setSession] = useState<any>(null);
   const [dbMatches, setDbMatches] = useState<any[]>([]);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [loadingProfiles, setLoadingProfiles] = useState(true);
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      setSession(currentSession);
-
-      if (!currentSession) {
-        localStorage.removeItem("veloura_user");
-        setCurrentUser(null);
-        setProfiles(mockProfiles);
-        return;
-      }
-
-      const stored = localStorage.getItem("veloura_user");
-      let user = stored ? JSON.parse(stored) : null;
-
-      let profileCompleted = false;
-      let profileData: any = null;
-      let apiCallSucceeded = false;
+      setLoadingProfiles(true);
       try {
-        const res = await fetch("/api/profile", {
-          headers: { Authorization: `Bearer ${currentSession.access_token}` },
-        });
-        if (res.ok) {
-          profileData = await res.json();
-          apiCallSucceeded = true;
-          profileCompleted = profileData?.profile?.profileCompleted === true;
-          setLikesCount(profileData?.likesCount || 0);
-          setIsVip(profileData?.subscription?.tier === "PREMIUM" && profileData?.subscription?.isActive);
-          setBlockedUserIds(profileData?.blockedUserIds || []);
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        setSession(currentSession);
 
-          // Fetch matches to know if there's a match
-          try {
-            const matchesRes = await fetch("/api/matches", {
-              headers: { Authorization: `Bearer ${currentSession.access_token}` },
-            });
-            if (matchesRes.ok) {
-              const matchesData = await matchesRes.json();
-              setDbMatches(matchesData.matches || []);
-            }
-          } catch (mErr) {
-            console.error("Error fetching db matches:", mErr);
-          }
-        } else if (res.status === 404) {
-          // User exists in Supabase Auth but has no DB profile yet
-          // Do NOT redirect to onboarding — let dashboard show normally
-          // The API will auto-create the user record on PATCH (onboarding save)
-          apiCallSucceeded = true;
-          profileCompleted = false; // no profile yet, but we handle this below
+        if (!currentSession) {
+          localStorage.removeItem("veloura_user");
+          setCurrentUser(null);
+          setProfiles(mockProfiles);
+          return;
         }
-      } catch (_) {
-        // Network error — assume profile may exist, do NOT redirect
-        apiCallSucceeded = false;
+
+        let profileCompleted = false;
+        let profileData: any = null;
+        let apiCallSucceeded = false;
+        try {
+          const res = await fetch("/api/profile", {
+            headers: { Authorization: `Bearer ${currentSession.access_token}` },
+          });
+          if (res.ok) {
+            profileData = await res.json();
+            apiCallSucceeded = true;
+            profileCompleted = profileData?.profile?.profileCompleted === true;
+            setLikesCount(profileData?.likesCount || 0);
+            setIsVip(profileData?.subscription?.tier === "PREMIUM" && profileData?.subscription?.isActive);
+            setBlockedUserIds(profileData?.blockedUserIds || []);
+          } else if (res.status === 404) {
+            // User exists in Supabase Auth but has no DB profile yet
+            apiCallSucceeded = true;
+            profileCompleted = false;
+            profileData = { profile: null };
+          }
+        } catch (err) {
+          console.error("Error fetching profile:", err);
+          apiCallSucceeded = false;
+        }
+
+        // Redirect to onboarding if profile is null or profileCompleted is false
+        if (apiCallSucceeded && (profileData?.profile === null || profileData?.profile === undefined || !profileCompleted)) {
+          window.location.replace(`/${currentLang}/onboarding`);
+          return;
+        }
+
+        // Fetch matches to get already swiped user IDs
+        let swipedUserIds: string[] = [];
+        try {
+          const matchesRes = await fetch("/api/matches", {
+            headers: { Authorization: `Bearer ${currentSession.access_token}` },
+          });
+          if (matchesRes.ok) {
+            const matchesData = await matchesRes.json();
+            setDbMatches(matchesData.matches || []);
+            swipedUserIds = matchesData.swipedUserIds || [];
+          }
+        } catch (mErr) {
+          console.error("Error fetching db matches:", mErr);
+        }
+
+        const userObj = {
+          id: currentSession.user.id,
+          email: currentSession.user.email,
+          role: profileData?.role || "USER",
+          profile: {
+            ...(profileData?.profile || {}),
+            profileCompleted,
+          },
+          subscription: profileData?.subscription,
+          likesCount: profileData?.likesCount || 0,
+        };
+        localStorage.setItem("veloura_user", JSON.stringify(userObj));
+        setCurrentUser(userObj);
+
+        // Filter out blocked users, swiped users, and the current user's own profile
+        const blocked = profileData?.blockedUserIds || [];
+        const currentUserId = currentSession.user.id;
+        const filteredProfiles = mockProfiles.filter(p => 
+          p.id !== currentUserId && 
+          !blocked.includes(p.id) && 
+          !swipedUserIds.includes(p.id)
+        );
+        setProfiles(filteredProfiles);
+        
+        const storedLikes = JSON.parse(localStorage.getItem("veloura_likes") || "[]");
+        setLikesGiven(storedLikes);
+      } catch (err) {
+        console.error("checkAuth error:", err);
+      } finally {
+        setLoadingProfiles(false);
       }
-
-      user = {
-        id: currentSession.user.id,
-        email: currentSession.user.email,
-        role: profileData?.role || "USER",
-        profile: {
-          ...(profileData?.profile || {}),
-          profileCompleted,
-        },
-        subscription: profileData?.subscription,
-        likesCount: profileData?.likesCount || 0,
-      };
-      localStorage.setItem("veloura_user", JSON.stringify(user));
-      setCurrentUser(user);
-
-      // CRITICAL FIX:
-      // Only redirect to onboarding if ALL of these are true:
-      // 1. The API call actually succeeded (no network error)
-      // 2. A profile record EXISTS in DB (profileData?.profile is not null)
-      // 3. profileCompleted is explicitly false
-      // 
-      // If the API failed or user has no profile row yet → show dashboard normally
-      // (They will be redirected via auth-redirect on next app open)
-      const hasExistingProfile = apiCallSucceeded && profileData?.profile !== null && profileData?.profile !== undefined;
-      if (hasExistingProfile && profileCompleted === false) {
-        window.location.replace(`/${currentLang}/onboarding`);
-        return;
-      }
-
-      // Filter out blocked users from profiles
-      const blocked = profileData?.blockedUserIds || [];
-      const filteredProfiles = mockProfiles.filter(p => !blocked.includes(p.id));
-      setProfiles(filteredProfiles);
-      
-      const storedLikes = JSON.parse(localStorage.getItem("veloura_likes") || "[]");
-      setLikesGiven(storedLikes);
     };
 
     checkAuth();
@@ -321,14 +324,21 @@ export default function DashboardPage() {
         </div>
 
         {/* Profile counter */}
-        {profiles.length > 0 && (
+        {!loadingProfiles && profiles.length > 0 && (
           <p className="text-[10px] text-muted mb-2">
             {currentIndex + 1} / {profiles.length} perfiles
           </p>
         )}
 
         {/* ── MAIN CARD ── */}
-        {activeProfile ? (
+        {loadingProfiles ? (
+          <div className="w-full flex flex-col items-center justify-center gap-5 py-16" style={{ height: "62vh", minHeight: "420px", width: "100%" }}>
+            <div className="w-full rounded-[32px] overflow-hidden border border-white/5 animate-pulse bg-[#0D1530]/50 flex flex-col items-center justify-center space-y-4" style={{ height: "100%", width: "100%" }}>
+              <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              <p className="text-xs text-muted font-semibold tracking-wider uppercase">Cargando perfiles...</p>
+            </div>
+          </div>
+        ) : activeProfile ? (
           <div
             className={`w-full relative transition-all duration-300 ${
               swipeDir === "right" ? "translate-x-40 rotate-12 opacity-0" :
@@ -504,7 +514,7 @@ export default function DashboardPage() {
         )}
 
         {/* Preview of next card */}
-        {activeProfile && currentIndex + 1 < profiles.length && (
+        {!loadingProfiles && activeProfile && currentIndex + 1 < profiles.length && (
           <div className="w-full mt-3">
             <div className="w-full h-12 rounded-2xl bg-[#151F3C]/60 border border-white/5 flex items-center px-4 gap-3">
               {profiles[currentIndex + 1].imageUrl ? (

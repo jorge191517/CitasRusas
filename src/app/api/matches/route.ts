@@ -87,6 +87,13 @@ export async function GET(req: NextRequest) {
       }
     });
 
+    // Fetch all likes (including DISLIKE, LIKE, SUPER_LIKE) sent by this user to filter discovery
+    const allSentSwipes = await prisma.like.findMany({
+      where: { senderId: authUserId },
+      select: { receiverId: true }
+    });
+    const swipedUserIds = allSentSwipes.map(l => l.receiverId);
+
     return NextResponse.json({
       success: true,
       sentLikes: sentLikes.map(l => ({
@@ -122,7 +129,8 @@ export async function GET(req: NextRequest) {
           lookingFor: otherUser.profile?.lookingFor || "",
           conversationId: m.conversationId
         };
-      })
+      }),
+      swipedUserIds
     });
   } catch (err: any) {
     console.error("[GET MATCHES] Error:", err.message);

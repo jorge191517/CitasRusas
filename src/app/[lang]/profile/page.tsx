@@ -150,9 +150,23 @@ export default function ProfilePage() {
 
   const handleSave = async () => {
     if (!currentUser) return;
+
+    // Client-side validation
+    if (!firstName.trim() || firstName.trim().length < 2) {
+      alert(currentLang === "es" ? "El nombre debe tener al menos 2 caracteres." : "Name must be at least 2 characters.");
+      return;
+    }
+    if (!country.trim() || country.trim().length < 2) {
+      alert(currentLang === "es" ? "El país debe tener al menos 2 caracteres." : "Country must be at least 2 characters.");
+      return;
+    }
+
     const updatedProfile = {
       ...(currentUser.profile || {}),
-      firstName, bio, country, profession,
+      firstName: firstName.trim(),
+      bio: bio.trim(),
+      country: country.trim(),
+      profession: profession.trim(),
       interests, hobbies, lookingFor,
       mainPhotoUrl, photos,
     };
@@ -244,10 +258,8 @@ export default function ProfilePage() {
         }
 
         // Auto save to database!
-        const updatedProfile = {
-          ...(currentUser?.profile || {}),
-          firstName, bio, country, profession,
-          interests, hobbies, lookingFor,
+        // Only send mainPhotoUrl and photos to prevent Zod validation errors on empty basic fields
+        const photoPayload = {
           mainPhotoUrl: newMain,
           photos: newPhotos,
         };
@@ -260,7 +272,7 @@ export default function ProfilePage() {
         const res = await fetch("/api/profile", {
           method: "PATCH",
           headers,
-          body: JSON.stringify(updatedProfile),
+          body: JSON.stringify(photoPayload),
         });
 
         if (res.ok) {
@@ -369,6 +381,48 @@ export default function ProfilePage() {
           </div>
         </div>
 
+        <button
+          onClick={() => setEditing(!editing)}
+          className="w-full py-3 bg-[#151F3C]/85 border border-primary/25 hover:bg-[#151F3C] text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 transition hover:scale-[1.01] active:scale-[0.99] shadow-md relative z-10"
+        >
+          ✏️ {editing ? (currentLang === "es" ? "Cancelar edición" : "Cancel editing") : (currentLang === "es" ? "Editar datos de perfil" : "Edit profile details")}
+        </button>
+
+        {/* ── EDIT FIELDS ── */}
+        {editing && (
+          <div className="glass rounded-2xl p-4 border border-white/5 space-y-3 relative z-10 animate-fade-in">
+            <h3 className="text-xs font-bold text-muted uppercase tracking-wider">
+              {currentLang === "es" ? "Datos básicos" : "Basic info"}
+            </h3>
+            <div>
+              <label className="text-[10px] text-muted mb-1 block">{currentLang === "es" ? "Nombre" : "Name"}</label>
+              <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full px-3 py-2 bg-[#0A1128]/80 border border-primary/20 rounded-xl text-white text-sm focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted mb-1 block">{currentLang === "es" ? "País" : "Country"}</label>
+              <input type="text" value={country} onChange={(e) => setCountry(e.target.value)} className="w-full px-3 py-2 bg-[#0A1128]/80 border border-primary/20 rounded-xl text-white text-sm focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted mb-1 block">{currentLang === "es" ? "Profesión" : "Profession"}</label>
+              <input type="text" value={profession} onChange={(e) => setProfession(e.target.value)} className="w-full px-3 py-2 bg-[#0A1128]/80 border border-primary/20 rounded-xl text-white text-sm focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted mb-1 block">{currentLang === "es" ? "¿Qué buscas?" : "Looking for"}</label>
+              <select value={lookingFor} onChange={(e) => setLookingFor(e.target.value)} className="w-full px-3 py-2 bg-[#0A1128]/80 border border-primary/20 rounded-xl text-white text-sm focus:outline-none">
+                <option value="">—</option>
+                <option value="friendship">{currentLang === "es" ? "Amistad" : "Friendship"}</option>
+                <option value="relationship">{currentLang === "es" ? "Relación" : "Relationship"}</option>
+                <option value="serious">{currentLang === "es" ? "Relación seria" : "Serious relationship"}</option>
+                <option value="marriage">{currentLang === "es" ? "Matrimonio" : "Marriage"}</option>
+                <option value="cultural">{currentLang === "es" ? "Intercambio cultural" : "Cultural exchange"}</option>
+              </select>
+            </div>
+            <button onClick={handleSave} className="w-full py-3 font-bold rounded-xl text-sm text-background" style={{ background: "linear-gradient(135deg, #D4A373, #FF6B8B)" }}>
+              💾 {currentLang === "es" ? "Guardar cambios" : "Save changes"}
+            </button>
+          </div>
+        )}
+
         {/* ── PHOTO GALLERY ── */}
         <div>
           <h3 className="text-xs font-bold text-muted mb-2 uppercase tracking-wider">
@@ -411,10 +465,7 @@ export default function ProfilePage() {
                     const newPhotos = photos.filter((_, idx) => idx !== i);
                     setPhotos(newPhotos);
 
-                    const updatedProfile = {
-                      ...(currentUser?.profile || {}),
-                      firstName, bio, country, profession,
-                      interests, hobbies, lookingFor,
+                    const photoPayload = {
                       mainPhotoUrl,
                       photos: newPhotos,
                     };
@@ -426,7 +477,7 @@ export default function ProfilePage() {
                     const res = await fetch("/api/profile", {
                       method: "PATCH",
                       headers,
-                      body: JSON.stringify(updatedProfile),
+                      body: JSON.stringify(photoPayload),
                     });
 
                     if (res.ok) {
@@ -540,40 +591,7 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* ── EDIT FIELDS ── */}
-        {editing && (
-          <div className="glass rounded-2xl p-4 border border-white/5 space-y-3">
-            <h3 className="text-xs font-bold text-muted uppercase tracking-wider">
-              {currentLang === "es" ? "Datos básicos" : "Basic info"}
-            </h3>
-            <div>
-              <label className="text-[10px] text-muted mb-1 block">{currentLang === "es" ? "Nombre" : "Name"}</label>
-              <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full px-3 py-2 bg-[#0A1128]/80 border border-primary/20 rounded-xl text-white text-sm focus:outline-none" />
-            </div>
-            <div>
-              <label className="text-[10px] text-muted mb-1 block">{currentLang === "es" ? "País" : "Country"}</label>
-              <input type="text" value={country} onChange={(e) => setCountry(e.target.value)} className="w-full px-3 py-2 bg-[#0A1128]/80 border border-primary/20 rounded-xl text-white text-sm focus:outline-none" />
-            </div>
-            <div>
-              <label className="text-[10px] text-muted mb-1 block">{currentLang === "es" ? "Profesión" : "Profession"}</label>
-              <input type="text" value={profession} onChange={(e) => setProfession(e.target.value)} className="w-full px-3 py-2 bg-[#0A1128]/80 border border-primary/20 rounded-xl text-white text-sm focus:outline-none" />
-            </div>
-            <div>
-              <label className="text-[10px] text-muted mb-1 block">{currentLang === "es" ? "¿Qué buscas?" : "Looking for"}</label>
-              <select value={lookingFor} onChange={(e) => setLookingFor(e.target.value)} className="w-full px-3 py-2 bg-[#0A1128]/80 border border-primary/20 rounded-xl text-white text-sm focus:outline-none">
-                <option value="">—</option>
-                <option value="friendship">{currentLang === "es" ? "Amistad" : "Friendship"}</option>
-                <option value="relationship">{currentLang === "es" ? "Relación" : "Relationship"}</option>
-                <option value="serious">{currentLang === "es" ? "Relación seria" : "Serious relationship"}</option>
-                <option value="marriage">{currentLang === "es" ? "Matrimonio" : "Marriage"}</option>
-                <option value="cultural">{currentLang === "es" ? "Intercambio cultural" : "Cultural exchange"}</option>
-              </select>
-            </div>
-            <button onClick={handleSave} className="w-full py-3 font-bold rounded-xl text-sm text-background" style={{ background: "linear-gradient(135deg, #D4A373, #FF6B8B)" }}>
-              💾 {currentLang === "es" ? "Guardar cambios" : "Save changes"}
-            </button>
-          </div>
-        )}
+
 
         {successMsg && (
           <div className="glass rounded-2xl p-3 border border-green-500/30 text-center">

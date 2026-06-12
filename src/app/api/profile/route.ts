@@ -347,33 +347,22 @@ export async function PATCH(req: NextRequest) {
       const activeEmail = authUser?.email || body.email || "";
 
       // ── Step 1: Resolve the canonical userId for the Profile ──────────────
-      // Priority: Supabase Auth ID > existing User by email
-      let resolvedUserId = activeUserId;
+      // Use exclusively the Supabase ID
+      const resolvedUserId = activeUserId;
 
       // Check if User already exists by Supabase ID
       const userById = await prisma.user.findUnique({ where: { id: activeUserId } });
 
       if (!userById) {
-        // User doesn't exist by Supabase ID — check by email
-        const userByEmail = await prisma.user.findUnique({ where: { email: activeEmail } });
-
-        if (userByEmail) {
-          // A User with this email exists but with a different ID.
-          // Use that user's ID for the profile (the profile is tied to the DB user).
-          resolvedUserId = userByEmail.id;
-          console.warn(`User ID mismatch: Supabase=${activeUserId}, DB=${userByEmail.id}. Using DB id for profile.`);
-        } else {
-          // No user found at all — create one with the Supabase ID
-          await prisma.user.create({
-            data: {
-              id: activeUserId,
-              email: activeEmail,
-              role: "USER",
-            },
-          });
-        }
+        // Create user with current Supabase ID
+        await prisma.user.create({
+          data: {
+            id: activeUserId,
+            email: activeEmail,
+            role: "USER",
+          },
+        });
       }
-      // If userById exists, resolvedUserId is already correct
 
       // ── Step 2: Upsert Profile using resolvedUserId ───────────────────────
       const updatedProfile = await prisma.profile.upsert({
@@ -423,11 +412,12 @@ export async function PATCH(req: NextRequest) {
         },
       });
 
-      // Check if photos/mainPhotoUrl is actually provided in the request body
+      // Check if photos is explicitly provided in the request body
       const rawProfile = body.profile || body;
-      const hasPhotosUpdate = (rawProfile.photos !== undefined) || (rawProfile.mainPhotoUrl !== undefined);
+      const hasPhotosArrayUpdate = rawProfile.photos !== undefined;
+      const hasMainPhotoUrlUpdate = rawProfile.mainPhotoUrl !== undefined;
 
-      if (hasPhotosUpdate) {
+      if (hasPhotosArrayUpdate) {
         // Clear previous photos
         await prisma.photo.deleteMany({
           where: { userId: resolvedUserId }
@@ -442,6 +432,35 @@ export async function PATCH(req: NextRequest) {
               isPrimary: url === (validProfile.mainPhotoUrl !== undefined ? validProfile.mainPhotoUrl : updatedProfile.mainPhotoUrl),
               isApproved: true
             }))
+          });
+        }
+      } else if (hasMainPhotoUrlUpdate && validProfile.mainPhotoUrl) {
+        // Only mainPhotoUrl was updated, photos array was not sent.
+        // Update the mainPhotoUrl in Photo table:
+        // Set all existing user photos to isPrimary: false
+        await prisma.photo.updateMany({
+          where: { userId: resolvedUserId },
+          data: { isPrimary: false }
+        });
+
+        // Check if this URL already exists in user's photos
+        const existingPhoto = await prisma.photo.findFirst({
+          where: { userId: resolvedUserId, url: validProfile.mainPhotoUrl }
+        });
+
+        if (existingPhoto) {
+          await prisma.photo.update({
+            where: { id: existingPhoto.id },
+            data: { isPrimary: true }
+          });
+        } else {
+          await prisma.photo.create({
+            data: {
+              userId: resolvedUserId,
+              url: validProfile.mainPhotoUrl,
+              isPrimary: true,
+              isApproved: true
+            }
           });
         }
       }

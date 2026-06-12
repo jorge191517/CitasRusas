@@ -66,14 +66,22 @@ export default async function LandingPage({ params }: PageProps) {
 
             {/* Profile Photo Mock */}
             <div className="my-3 flex-grow rounded-2xl bg-[#0A1128] border border-white/5 relative overflow-hidden flex flex-col justify-end p-4">
-              {/* Graphic Representation of User */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <svg viewBox="0 0 100 100" className="w-24 h-24 text-primary opacity-60">
-                  <circle cx="50" cy="40" r="20" fill="currentColor" />
-                  <path d="M20,85 C20,70 30,60 50,60 C70,60 80,70 80,85" fill="currentColor" />
-                </svg>
+              {/* Graphic Representation of User Collage */}
+              <div className="absolute inset-0 w-full h-full">
+                {/* Card 1 (Man behind) */}
+                <div className="absolute top-2 left-[-10px] w-full h-[90%] rounded-2xl overflow-hidden transform -rotate-6 opacity-40 blur-[1px]">
+                  <img src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&auto=format&fit=crop&q=80" alt="Profile Man" className="w-full h-full object-cover" />
+                </div>
+                {/* Card 2 (Woman behind) */}
+                <div className="absolute top-2 right-[-10px] w-full h-[90%] rounded-2xl overflow-hidden transform rotate-6 opacity-40 blur-[1px]">
+                  <img src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&auto=format&fit=crop&q=80" alt="Profile Woman" className="w-full h-full object-cover" />
+                </div>
+                {/* Main Card (Center) */}
+                <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden z-10 border border-primary/20 shadow-2xl">
+                  <img src="https://images.unsplash.com/photo-1517365830460-955ce3ccd263?w=600&auto=format&fit=crop&q=80" alt="Main Profile" className="w-full h-full object-cover" />
+                </div>
               </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0A1128] via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0A1128] via-[#0A1128]/40 to-transparent z-10" />
               
               {/* Profile Details */}
               <div className="z-10 text-left">

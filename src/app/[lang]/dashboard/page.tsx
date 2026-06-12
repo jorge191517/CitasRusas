@@ -95,6 +95,7 @@ export default function DashboardPage() {
         try {
           const matchesRes = await fetch("/api/matches", {
             headers: { Authorization: `Bearer ${currentSession.access_token}` },
+            cache: "no-store",
           });
           if (matchesRes.ok) {
             const matchesData = await matchesRes.json();
@@ -202,7 +203,15 @@ export default function DashboardPage() {
     }
   };
 
-  const activeProfile = currentIndex < profiles.length ? profiles[currentIndex] : null;
+  const displayedProfiles = profiles.filter(p => {
+    if (!filterCountry) return true;
+    if (filterCountry === "Otros") {
+      return !["España", "Rusia", "Letonia"].includes(p.country);
+    }
+    return p.country.toLowerCase().includes(filterCountry.toLowerCase());
+  });
+
+  const activeProfile = currentIndex < displayedProfiles.length ? displayedProfiles[currentIndex] : null;
 
   const handleSwipe = async (direction: "left" | "right" | "up", profile: DatingProfile) => {
     // 1. Guest Check
@@ -327,11 +336,62 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Profile counter */}
+        {/* Top Tabs */}
         {!loadingProfiles && profiles.length > 0 && (
-          <p className="text-[10px] text-muted mb-2">
-            {currentIndex + 1} / {profiles.length} perfiles
-          </p>
+          <>
+            <div className="w-full flex items-center justify-between gap-2 overflow-x-auto pb-2 mb-2 scrollbar-hide">
+              {["Todos", "España", "Rusia", "Letonia", "Otros"].map(tab => {
+                const isActive = (filterCountry === "" && tab === "Todos") || filterCountry === tab || (filterCountry === "Otros" && tab === "Otros");
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      if (tab === "Todos") setFilterCountry("");
+                      else if (tab === "Otros") setFilterCountry("Otros");
+                      else setFilterCountry(tab);
+                      setCurrentIndex(0);
+                    }}
+                    className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                      isActive
+                        ? "bg-primary text-white"
+                        : "bg-white/5 text-muted hover:bg-white/10"
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Usuarios en línea */}
+            <div className="w-full mb-4">
+              <p className="text-[10px] uppercase tracking-wider text-muted font-bold mb-2 ml-1">Usuarios en línea</p>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                {profiles.slice().reverse().slice(0, 10).map((p, i) => (
+                  <div key={`online-${p.id}-${i}`} className="flex flex-col items-center gap-1 flex-shrink-0 cursor-pointer" onClick={() => {
+                    // Si el usuario hace click en un usuario en línea, lo buscamos en los perfiles filtrados
+                    // Si no está, quitamos el filtro.
+                    let targetIdx = displayedProfiles.findIndex(prof => prof.id === p.id);
+                    if (targetIdx === -1) {
+                      setFilterCountry("");
+                      const newIdx = profiles.findIndex(prof => prof.id === p.id);
+                      if (newIdx !== -1) setCurrentIndex(newIdx);
+                    } else {
+                      setCurrentIndex(targetIdx);
+                    }
+                  }}>
+                    <div className="relative">
+                      <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-[#D4A373] to-[#FF6B8B]">
+                        <img src={p.imageUrl} alt={p.firstName} className="w-full h-full rounded-full object-cover border-2 border-background" />
+                      </div>
+                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full"></div>
+                    </div>
+                    <span className="text-[9px] text-white font-medium">{p.firstName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
 
         {/* ── MAIN CARD ── */}

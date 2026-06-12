@@ -141,11 +141,24 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: Register swipe interaction (Like/Dislike)
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+    
+    let user;
+    let error;
+    
+    if (token) {
+      const authRes = await supabase.auth.getUser(token);
+      user = authRes.data?.user;
+      error = authRes.error;
+    } else {
+      const authRes = await supabase.auth.getUser();
+      user = authRes.data?.user;
+      error = authRes.error;
+    }
+
     if (error || !user) {
       return NextResponse.json({ error: "Unauthorized access: Session invalid" }, { status: 401 });
     }

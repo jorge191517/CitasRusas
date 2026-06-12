@@ -25,6 +25,7 @@ export const profileSchema = z.object({
   hobbies: z.array(z.string()).optional().default([]),
   lookingFor: z.string().optional().nullable(),
   mainPhotoUrl: z.string().optional().nullable().or(z.literal("")),
+  photos: z.array(z.string()).max(5, "Maximum 5 photos allowed").optional().default([]),
   profileCompleted: z.boolean().optional().default(false),
   height: z.number().min(100).max(250).optional().nullable(),
   videoIntroUrl: z.string().optional().nullable().or(z.literal("")),

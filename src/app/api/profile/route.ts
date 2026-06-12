@@ -41,17 +41,27 @@ export async function GET(req: NextRequest) {
 
     const dbUser = await prisma.user.findUnique({
       where: { id: authUser.id },
-      include: { profile: true }
+      include: { 
+        profile: true,
+        photos: {
+          orderBy: { createdAt: "asc" }
+        }
+      }
     });
 
     if (!dbUser) {
       return NextResponse.json({ error: "User not found in database" }, { status: 404 });
     }
 
+    const galleryPhotos = dbUser.photos.filter(p => !p.isPrimary).map(p => p.url);
+
     return NextResponse.json({
       success: true,
       role: dbUser.role,
-      profile: dbUser.profile
+      profile: dbUser.profile ? {
+        ...dbUser.profile,
+        photos: galleryPhotos
+      } : null
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -84,9 +94,33 @@ export async function POST(req: NextRequest) {
 
     const validProfile = profileValidation.data;
 
-    // Reject blob URLs
-    if (validProfile.mainPhotoUrl && validProfile.mainPhotoUrl.startsWith("blob:")) {
-      return NextResponse.json({ error: "La URL de la foto de perfil no puede ser una URL de tipo blob local." }, { status: 400 });
+    // Combine mainPhotoUrl and any photos array
+    const allPhotoUrls: string[] = [];
+    if (validProfile.mainPhotoUrl) {
+      allPhotoUrls.push(validProfile.mainPhotoUrl);
+    }
+    if (validProfile.photos && Array.isArray(validProfile.photos)) {
+      validProfile.photos.forEach((url: string) => {
+        if (url && !allPhotoUrls.includes(url)) {
+          allPhotoUrls.push(url);
+        }
+      });
+    }
+
+    // Reject blob URLs and non-http URLs
+    const hasBlob = (url: string) => url.startsWith("blob:");
+    const isInvalidUrl = (url: string) => !url.startsWith("http://") && !url.startsWith("https://");
+
+    if (validProfile.mainPhotoUrl && (hasBlob(validProfile.mainPhotoUrl) || isInvalidUrl(validProfile.mainPhotoUrl))) {
+      return NextResponse.json({ error: "La URL de la foto de perfil no es válida o es de tipo blob." }, { status: 400 });
+    }
+
+    if (allPhotoUrls.some(url => hasBlob(url) || isInvalidUrl(url))) {
+      return NextResponse.json({ error: "Una o más URLs de las fotos de galería no son válidas o son de tipo blob." }, { status: 400 });
+    }
+
+    if (allPhotoUrls.length > 5) {
+      return NextResponse.json({ error: "No se permiten más de 5 fotos en total." }, { status: 400 });
     }
 
     try {
@@ -140,11 +174,40 @@ export async function POST(req: NextRequest) {
           mainPhotoUrl: validProfile.mainPhotoUrl,
           profileCompleted: validProfile.profileCompleted,
           height: validProfile.height,
-          videoIntroUrl: validProfile.videoIntroUrl,
         }
       });
 
-      return NextResponse.json({ success: true, user: dbUser, profile: dbProfile });
+      // Clear previous photos
+      await prisma.photo.deleteMany({
+        where: { userId: activeUserId }
+      });
+
+      // Save photos in Photo table
+      if (allPhotoUrls.length > 0) {
+        await prisma.photo.createMany({
+          data: allPhotoUrls.map((url) => ({
+            userId: activeUserId,
+            url,
+            isPrimary: url === validProfile.mainPhotoUrl,
+            isApproved: true
+          }))
+        });
+      }
+
+      // Fetch the non-primary photos to return as gallery photos
+      const savedPhotos = await prisma.photo.findMany({
+        where: { userId: activeUserId, isPrimary: false },
+        orderBy: { createdAt: "asc" }
+      });
+
+      return NextResponse.json({
+        success: true,
+        user: dbUser,
+        profile: {
+          ...dbProfile,
+          photos: savedPhotos.map(p => p.url)
+        }
+      });
     } catch (dbErr: any) {
       console.error("Prisma profile create error:", dbErr.message);
       if (isDevelopment) {
@@ -182,9 +245,33 @@ export async function PATCH(req: NextRequest) {
 
     const validProfile = profileValidation.data;
 
-    // Reject blob URLs
-    if (validProfile.mainPhotoUrl && validProfile.mainPhotoUrl.startsWith("blob:")) {
-      return NextResponse.json({ error: "La URL de la foto de perfil no puede ser una URL de tipo blob local." }, { status: 400 });
+    // Combine mainPhotoUrl and any photos array
+    const allPhotoUrls: string[] = [];
+    if (validProfile.mainPhotoUrl) {
+      allPhotoUrls.push(validProfile.mainPhotoUrl);
+    }
+    if (validProfile.photos && Array.isArray(validProfile.photos)) {
+      validProfile.photos.forEach((url: string) => {
+        if (url && !allPhotoUrls.includes(url)) {
+          allPhotoUrls.push(url);
+        }
+      });
+    }
+
+    // Reject blob URLs and non-http URLs
+    const hasBlob = (url: string) => url.startsWith("blob:");
+    const isInvalidUrl = (url: string) => !url.startsWith("http://") && !url.startsWith("https://");
+
+    if (validProfile.mainPhotoUrl && (hasBlob(validProfile.mainPhotoUrl) || isInvalidUrl(validProfile.mainPhotoUrl))) {
+      return NextResponse.json({ error: "La URL de la foto de perfil no es válida o es de tipo blob." }, { status: 400 });
+    }
+
+    if (allPhotoUrls.some(url => hasBlob(url) || isInvalidUrl(url))) {
+      return NextResponse.json({ error: "Una o más URLs de las fotos de galería no son válidas o son de tipo blob." }, { status: 400 });
+    }
+
+    if (allPhotoUrls.length > 5) {
+      return NextResponse.json({ error: "No se permiten más de 5 fotos en total." }, { status: 400 });
     }
 
     try {
@@ -264,7 +351,37 @@ export async function PATCH(req: NextRequest) {
           videoIntroUrl: validProfile.videoIntroUrl,
         },
       });
-      return NextResponse.json({ success: true, profile: updatedProfile });
+
+      // Clear previous photos
+      await prisma.photo.deleteMany({
+        where: { userId: resolvedUserId }
+      });
+
+      // Save photos in Photo table
+      if (allPhotoUrls.length > 0) {
+        await prisma.photo.createMany({
+          data: allPhotoUrls.map((url) => ({
+            userId: resolvedUserId,
+            url,
+            isPrimary: url === (validProfile.mainPhotoUrl !== undefined ? validProfile.mainPhotoUrl : updatedProfile.mainPhotoUrl),
+            isApproved: true
+          }))
+        });
+      }
+
+      // Fetch the non-primary photos to return as gallery photos
+      const savedPhotos = await prisma.photo.findMany({
+        where: { userId: resolvedUserId, isPrimary: false },
+        orderBy: { createdAt: "asc" }
+      });
+
+      return NextResponse.json({
+        success: true,
+        profile: {
+          ...updatedProfile,
+          photos: savedPhotos.map(p => p.url)
+        }
+      });
     } catch (dbErr: any) {
       console.error("Prisma profile upsert error:", dbErr.message);
       if (isDevelopment) {

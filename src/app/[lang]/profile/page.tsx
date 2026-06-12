@@ -182,14 +182,51 @@ export default function ProfilePage() {
       const uploadedUrl = await uploadFile(file, path);
 
       if (uploadedUrl) {
+        let newMain = mainPhotoUrl;
+        let newPhotos = [...photos];
+
         if (!mainPhotoUrl) {
+          newMain = uploadedUrl;
           setMainPhotoUrl(uploadedUrl);
-        } else if (photos.length < 5) {
-          setPhotos(prev => [...prev, uploadedUrl]);
+        } else if (photos.length < 4) {
+          newPhotos = [...photos, uploadedUrl];
+          setPhotos(newPhotos);
+        }
+
+        // Auto save to database!
+        const updatedProfile = {
+          ...(currentUser?.profile || {}),
+          firstName, bio, country, profession,
+          interests, hobbies, lookingFor,
+          mainPhotoUrl: newMain,
+          photos: newPhotos,
+        };
+        const updated = { ...currentUser, profile: updatedProfile };
+        localStorage.setItem("veloura_user", JSON.stringify(updated));
+        setCurrentUser(updated);
+
+        // Fetch patch
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (session) headers["Authorization"] = `Bearer ${session.access_token}`;
+
+        const res = await fetch("/api/profile", {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify(updatedProfile),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.profile) {
+            setPhotos(data.profile.photos || []);
+            setMainPhotoUrl(data.profile.mainPhotoUrl || "");
+          }
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error uploading photo:", err);
+      alert(err.message || "Error al subir la foto");
     } finally {
       setUploading(false);
     }
@@ -277,44 +314,96 @@ export default function ProfilePage() {
         </div>
 
         {/* ── PHOTO GALLERY ── */}
-        {(photos.length > 0 || mainPhotoUrl) && (
-          <div>
-            <h3 className="text-xs font-bold text-muted mb-2 uppercase tracking-wider">
-              {currentLang === "es" ? "Galería" : "Gallery"}
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              {mainPhotoUrl && (
-                <div className="relative aspect-square rounded-2xl overflow-hidden border-2 border-primary/40">
-                  <img
-                    src={mainPhotoUrl}
-                    alt="Main"
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const el = e.target as HTMLImageElement;
-                      el.style.display = "none";
-                      el.parentElement!.style.background = "linear-gradient(135deg, #151F3C, #0A1128)";
-                    }}
-                  />
-                  <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-primary/80 rounded text-[8px] font-bold text-background">MAIN</div>
-                </div>
-              )}
-              {photos.map((url, i) => (
-                <div key={i} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10">
-                  <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
-                </div>
-              ))}
-              {(photos.length + (mainPhotoUrl ? 1 : 0)) < 6 && (
+        <div>
+          <h3 className="text-xs font-bold text-muted mb-2 uppercase tracking-wider">
+            {currentLang === "es" ? "Galería" : "Gallery"}
+          </h3>
+          <div className="grid grid-cols-3 gap-2">
+            {mainPhotoUrl ? (
+              <div className="relative aspect-square rounded-2xl overflow-hidden border-2 border-primary/40">
+                <img
+                  src={mainPhotoUrl}
+                  alt="Main"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const el = e.target as HTMLImageElement;
+                    el.style.display = "none";
+                    el.parentElement!.style.background = "linear-gradient(135deg, #151F3C, #0A1128)";
+                  }}
+                />
+                <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-primary/80 rounded text-[8px] font-bold text-background">MAIN</div>
+              </div>
+            ) : (
+              <div
+                onClick={() => photoRef.current?.click()}
+                className="aspect-square rounded-2xl border-2 border-dashed border-white/15 hover:border-primary/40 flex flex-col items-center justify-center text-muted text-xs cursor-pointer hover:text-white transition"
+              >
+                <span>📷 Main</span>
+                <span className="text-[9px] mt-0.5">(Añadir)</span>
+              </div>
+            )}
+
+            {photos.map((url, i) => (
+              <div key={i} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10">
+                <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
                 <button
-                  onClick={() => photoRef.current?.click()}
-                  className="aspect-square rounded-2xl border-2 border-dashed border-white/15 hover:border-primary/40 flex items-center justify-center text-muted text-2xl hover:text-white transition"
-                  disabled={uploading}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const confirmDelete = confirm(currentLang === "es" ? "¿Seguro de eliminar esta foto?" : "Delete this photo?");
+                    if (!confirmDelete) return;
+
+                    const newPhotos = photos.filter((_, idx) => idx !== i);
+                    setPhotos(newPhotos);
+
+                    const updatedProfile = {
+                      ...(currentUser?.profile || {}),
+                      firstName, bio, country, profession,
+                      interests, hobbies, lookingFor,
+                      mainPhotoUrl,
+                      photos: newPhotos,
+                    };
+                    const updated = { ...currentUser, profile: updatedProfile };
+                    localStorage.setItem("veloura_user", JSON.stringify(updated));
+                    setCurrentUser(updated);
+
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const headers: Record<string, string> = { "Content-Type": "application/json" };
+                    if (session) headers["Authorization"] = `Bearer ${session.access_token}`;
+
+                    const res = await fetch("/api/profile", {
+                      method: "PATCH",
+                      headers,
+                      body: JSON.stringify(updatedProfile),
+                    });
+
+                    if (res.ok) {
+                      const data = await res.json();
+                      if (data.profile) {
+                        setPhotos(data.profile.photos || []);
+                        setMainPhotoUrl(data.profile.mainPhotoUrl || "");
+                      }
+                    }
+                  }}
+                  className="absolute top-1 right-1 w-5 h-5 bg-red-600/85 hover:bg-red-600 rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow-lg"
                 >
-                  {uploading ? "⏳" : "+"}
+                  ✕
                 </button>
-              )}
-            </div>
+              </div>
+            ))}
+
+            {/* Empty placeholders to make up to 5 total photos (1 main + 4 gallery) */}
+            {Array.from({ length: Math.max(0, 5 - (photos.length + (mainPhotoUrl ? 1 : 0))) }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => photoRef.current?.click()}
+                className="aspect-square rounded-2xl border-2 border-dashed border-white/15 hover:border-primary/40 flex items-center justify-center text-muted text-2xl hover:text-white transition"
+                disabled={uploading}
+              >
+                {uploading && i === 0 ? "⏳" : "+"}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
 
         {/* ── STATS ── */}
         <div className="grid grid-cols-3 gap-3">

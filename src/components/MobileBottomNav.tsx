@@ -14,6 +14,7 @@ export default function MobileBottomNav({ currentLang, active }: MobileBottomNav
   const [unreadChats, setUnreadChats] = useState(0);
   const [pendingLikes, setPendingLikes] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
     const user = localStorage.getItem("veloura_user");
@@ -101,52 +102,89 @@ export default function MobileBottomNav({ currentLang, active }: MobileBottomNav
   ];
 
   return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-50 bg-[#0A1128]/95 backdrop-blur-xl border-t border-white/10 safe-area-pb"
-      style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}
-    >
-      <div className="flex justify-around items-center h-16 max-w-lg mx-auto px-1">
-        {tabs.map((tab) => {
-          const isActive = active === tab.id;
-          const isPrivateTab = tab.id !== "discover";
-          const requiresLogin = isPrivateTab && !isLoggedIn;
+    <>
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 bg-[#0A1128]/95 backdrop-blur-xl border-t border-white/10 safe-area-pb"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}
+      >
+        <div className="flex justify-around items-center h-16 max-w-lg mx-auto px-1">
+          {tabs.map((tab) => {
+            const isActive = active === tab.id;
+            const isPrivateTab = tab.id !== "discover";
+            const requiresLogin = isPrivateTab && !isLoggedIn;
 
-          const handleTabClick = (e: React.MouseEvent) => {
-            if (requiresLogin) {
-              e.preventDefault();
-              window.location.href = `/${currentLang}/login`;
-            }
-          };
+            const handleTabClick = (e: React.MouseEvent) => {
+              if (requiresLogin) {
+                e.preventDefault();
+                setShowAuthModal(true);
+              }
+            };
 
-          return (
-            <Link
-              key={tab.id}
-              href={tab.href}
-              onClick={handleTabClick}
-              className={`relative flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-2xl transition-all duration-200 min-w-[56px] ${
-                isActive
-                  ? "text-primary"
-                  : "text-muted hover:text-white"
-              }`}
-            >
-              {isActive && (
-                <span className="absolute inset-0 bg-primary/10 rounded-2xl" />
-              )}
-              <span className="relative">
-                {tab.icon(active)}
-                {tab.badge != null && tab.badge > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#FF6B8B] rounded-full flex items-center justify-center text-[9px] font-bold text-white">
-                    {tab.badge > 9 ? "9+" : tab.badge}
-                  </span>
+            return (
+              <Link
+                key={tab.id}
+                href={tab.href}
+                onClick={handleTabClick}
+                className={`relative flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-2xl transition-all duration-200 min-w-[56px] ${
+                  isActive
+                    ? "text-primary"
+                    : "text-muted hover:text-white"
+                }`}
+              >
+                {isActive && (
+                  <span className="absolute inset-0 bg-primary/10 rounded-2xl" />
                 )}
-              </span>
-              <span className={`text-[9px] font-semibold relative ${isActive ? "text-primary" : ""}`}>
-                {tab.label}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+                <span className="relative">
+                  {tab.icon(active)}
+                  {tab.badge != null && tab.badge > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#FF6B8B] rounded-full flex items-center justify-center text-[9px] font-bold text-white">
+                      {tab.badge > 9 ? "9+" : tab.badge}
+                    </span>
+                  )}
+                </span>
+                <span className={`text-[9px] font-semibold relative ${isActive ? "text-primary" : ""}`}>
+                  {tab.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* Guest Auth Modal */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="glass max-w-sm w-full p-6 rounded-3xl border border-primary/20 text-center space-y-5 text-white">
+            <span className="text-5xl block">💖</span>
+            <h3 className="text-xl font-bold text-white">¡Únete a Veloura!</h3>
+            <p className="text-xs text-muted leading-relaxed">
+              Crea una cuenta para continuar. Podrás dar me gusta, enviar super likes, chatear y ver perfiles de forma ilimitada.
+            </p>
+            <div className="flex flex-col gap-2.5">
+              <Link
+                href={`/${currentLang}/register`}
+                className="w-full py-3 bg-premium-gold text-background font-bold rounded-xl text-center text-sm shadow-md"
+                onClick={() => setShowAuthModal(false)}
+              >
+                Crear cuenta
+              </Link>
+              <Link
+                href={`/${currentLang}/login`}
+                className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-semibold rounded-xl text-center text-sm"
+                onClick={() => setShowAuthModal(false)}
+              >
+                Iniciar sesión
+              </Link>
+            </div>
+            <button
+              onClick={() => setShowAuthModal(false)}
+              className="text-xs text-muted hover:text-white underline font-medium"
+            >
+              Seguir explorando
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

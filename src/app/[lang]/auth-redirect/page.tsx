@@ -31,8 +31,8 @@ export default function AuthRedirectPage() {
         } = await supabase.auth.getSession();
 
         if (!session) {
-          // No session — go to login
-          window.location.replace(`/${lang}/login`);
+          // No session — go to dashboard in guest mode
+          window.location.replace(`/${lang}/dashboard`);
           return;
         }
 

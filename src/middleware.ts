@@ -83,7 +83,6 @@ export async function middleware(request: NextRequest) {
   const isAuthRoute = pathname.includes("/login") || pathname.includes("/register");
   const isAuthRedirect = pathname.includes("/auth-redirect") || pathname.includes("/debug-auth"); // APK entry + debug — always allow
   const isProtectedRoute =
-    pathname.includes("/dashboard") ||
     pathname.includes("/profile") ||
     pathname.includes("/chat") ||
     pathname.includes("/admin") ||

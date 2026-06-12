@@ -34,43 +34,55 @@ export default function DashboardPage() {
   const [filterLang, setFilterLang] = useState("");
   const [likesGiven, setLikesGiven] = useState<string[]>([]);
 
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [likesCount, setLikesCount] = useState(0);
+  const [isVip, setIsVip] = useState(false);
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
+  const [showVipModal, setShowVipModal] = useState(false);
+  const [session, setSession] = useState<any>(null);
+
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      setSession(currentSession);
+
+      if (!currentSession) {
         localStorage.removeItem("veloura_user");
-        window.location.href = `/${currentLang}/login`;
+        setCurrentUser(null);
+        setProfiles(mockProfiles);
         return;
       }
 
       const stored = localStorage.getItem("veloura_user");
       let user = stored ? JSON.parse(stored) : null;
 
-      if (!user || user.id !== session.user.id) {
-        let profileCompleted = false;
-        let profileData: any = null;
-        try {
-          const res = await fetch("/api/profile", {
-            headers: { Authorization: `Bearer ${session.access_token}` },
-          });
-          if (res.ok) {
-            profileData = await res.json();
-            profileCompleted = profileData?.profile?.profileCompleted === true;
-          }
-        } catch (_) {}
+      let profileCompleted = false;
+      let profileData: any = null;
+      try {
+        const res = await fetch("/api/profile", {
+          headers: { Authorization: `Bearer ${currentSession.access_token}` },
+        });
+        if (res.ok) {
+          profileData = await res.json();
+          profileCompleted = profileData?.profile?.profileCompleted === true;
+          setLikesCount(profileData?.likesCount || 0);
+          setIsVip(profileData?.subscription?.tier === "PREMIUM" && profileData?.subscription?.isActive);
+          setBlockedUserIds(profileData?.blockedUserIds || []);
+        }
+      } catch (_) {}
 
-        user = {
-          id: session.user.id,
-          email: session.user.email,
-          role: profileData?.role || "USER",
-          profile: {
-            ...(profileData?.profile || {}),
-            profileCompleted,
-          },
-        };
-        localStorage.setItem("veloura_user", JSON.stringify(user));
-      }
-
+      user = {
+        id: currentSession.user.id,
+        email: currentSession.user.email,
+        role: profileData?.role || "USER",
+        profile: {
+          ...(profileData?.profile || {}),
+          profileCompleted,
+        },
+        subscription: profileData?.subscription,
+        likesCount: profileData?.likesCount || 0,
+      };
+      localStorage.setItem("veloura_user", JSON.stringify(user));
       setCurrentUser(user);
 
       if (user.profile && user.profile.profileCompleted === false) {
@@ -78,7 +90,11 @@ export default function DashboardPage() {
         return;
       }
 
-      setProfiles(mockProfiles);
+      // Filter out blocked users from profiles
+      const blocked = profileData?.blockedUserIds || [];
+      const filteredProfiles = mockProfiles.filter(p => !blocked.includes(p.id));
+      setProfiles(filteredProfiles);
+      
       const storedLikes = JSON.parse(localStorage.getItem("veloura_likes") || "[]");
       setLikesGiven(storedLikes);
     };
@@ -88,28 +104,71 @@ export default function DashboardPage() {
 
   const activeProfile = currentIndex < profiles.length ? profiles[currentIndex] : null;
 
-  const handleSwipe = (direction: "left" | "right" | "up", profile: DatingProfile) => {
+  const handleSwipe = async (direction: "left" | "right" | "up", profile: DatingProfile) => {
+    // 1. Guest Check
+    if (!session) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    // 2. Likes limit check for Free users
+    if (direction === "right" || direction === "up") {
+      if (!isVip && likesCount >= 10) {
+        setShowVipModal(true);
+        return;
+      }
+    }
+
     setSwipeDir(direction);
 
-    setTimeout(() => {
-      setSwipeDir(null);
-      setCurrentIndex((prev) => prev + 1);
+    // Call real API matches endpoint
+    try {
+      const res = await fetch("/api/matches", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          receiverId: profile.id,
+          type: direction === "up" ? "SUPER_LIKE" : (direction === "right" ? "LIKE" : "DISLIKE")
+        })
+      });
 
-      if (direction === "right" || direction === "up") {
-        // Save like
-        const newLikes = [...likesGiven, profile.id];
-        setLikesGiven(newLikes);
-        localStorage.setItem("veloura_likes", JSON.stringify(newLikes));
+      if (res.status === 403) {
+        const errData = await res.json();
+        if (errData.limitReached) {
+          setShowVipModal(true);
+          return;
+        }
+      }
 
-        // 35% match probability
-        if (Math.random() < 0.35) {
+      if (res.ok) {
+        const data = await res.json();
+        
+        // Update likesCount local state
+        if (direction === "right" || direction === "up") {
+          setLikesCount(prev => prev + 1);
+        }
+
+        if (data.isMatch && data.match) {
+          // It's a match! Show matched overlay
           setMatchedProfile(profile);
+          
+          // Save to local storage for local compatibility
           const existingMatches = JSON.parse(localStorage.getItem("veloura_matches") || "[]");
           if (!existingMatches.some((m: any) => m.id === profile.id)) {
             localStorage.setItem("veloura_matches", JSON.stringify([...existingMatches, profile]));
           }
         }
       }
+    } catch (err) {
+      console.error("[SWIPE ERROR]:", err);
+    }
+
+    setTimeout(() => {
+      setSwipeDir(null);
+      setCurrentIndex((prev) => prev + 1);
     }, 300);
   };
 
@@ -455,6 +514,67 @@ export default function DashboardPage() {
                 {currentLang === "es" ? "Seguir descubriendo" : "Keep discovering"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIP Limit Modal */}
+      {showVipModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="glass max-w-sm w-full p-6 rounded-3xl border border-primary/20 text-center space-y-5">
+            <span className="text-5xl block">👑</span>
+            <h3 className="text-xl font-bold text-white">¡Límite de likes alcanzado!</h3>
+            <p className="text-xs text-muted leading-relaxed">
+              Has agotado tus 10 likes gratuitos de hoy. Consigue el acceso VIP para poder dar likes y super likes de forma ilimitada.
+            </p>
+            <div className="flex flex-col gap-2.5">
+              <Link
+                href={`/${currentLang}/vip`}
+                className="w-full py-3 bg-premium-gold text-background font-bold rounded-xl text-center text-sm shadow-md"
+                onClick={() => setShowVipModal(false)}
+              >
+                Conseguir VIP Gratis
+              </Link>
+              <button
+                onClick={() => setShowVipModal(false)}
+                className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-semibold rounded-xl text-center text-sm"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Guest Auth Modal */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="glass max-w-sm w-full p-6 rounded-3xl border border-primary/20 text-center space-y-5">
+            <span className="text-5xl block">💖</span>
+            <h3 className="text-xl font-bold text-white">¡Únete a Veloura!</h3>
+            <p className="text-xs text-muted leading-relaxed">
+              Crea una cuenta para continuar. Podrás dar me gusta, enviar super likes, chatear y ver perfiles de forma ilimitada.
+            </p>
+            <div className="flex flex-col gap-2.5">
+              <Link
+                href={`/${currentLang}/register`}
+                className="w-full py-3 bg-premium-gold text-background font-bold rounded-xl text-center text-sm shadow-md"
+              >
+                Crear cuenta
+              </Link>
+              <Link
+                href={`/${currentLang}/login`}
+                className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-semibold rounded-xl text-center text-sm"
+              >
+                Iniciar sesión
+              </Link>
+            </div>
+            <button
+              onClick={() => setShowAuthModal(false)}
+              className="text-xs text-muted hover:text-white underline font-medium"
+            >
+              Seguir explorando
+            </button>
           </div>
         </div>
       )}

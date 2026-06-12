@@ -55,13 +55,40 @@ export async function GET(req: NextRequest) {
 
     const galleryPhotos = dbUser.photos.filter(p => !p.isPrimary).map(p => p.url);
 
+    // Fetch subscription details
+    const userSub = await prisma.subscription.findUnique({
+      where: { userId: authUser.id }
+    });
+
+    // Fetch total likes count sent by the user
+    const likesCount = await prisma.like.count({
+      where: {
+        senderId: authUser.id,
+        type: { in: ["LIKE", "SUPER_LIKE"] }
+      }
+    });
+
+    // Fetch blocked users list
+    const blocks = await prisma.block.findMany({
+      where: {
+        OR: [
+          { blockerId: authUser.id },
+          { blockedId: authUser.id }
+        ]
+      }
+    });
+    const blockedUserIds = blocks.map(b => b.blockerId === authUser.id ? b.blockedId : b.blockerId);
+
     return NextResponse.json({
       success: true,
       role: dbUser.role,
       profile: dbUser.profile ? {
         ...dbUser.profile,
         photos: galleryPhotos
-      } : null
+      } : null,
+      subscription: userSub,
+      likesCount,
+      blockedUserIds
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -375,6 +402,24 @@ export async function PATCH(req: NextRequest) {
         orderBy: { createdAt: "asc" }
       });
 
+      // Upsert subscription if provided in body
+      if (body.subscription) {
+        await prisma.subscription.upsert({
+          where: { userId: resolvedUserId },
+          update: {
+            tier: body.subscription.tier || "PREMIUM",
+            isActive: body.subscription.isActive ?? true,
+            expiresAt: body.subscription.expiresAt ? new Date(body.subscription.expiresAt) : null,
+          },
+          create: {
+            userId: resolvedUserId,
+            tier: body.subscription.tier || "PREMIUM",
+            isActive: body.subscription.isActive ?? true,
+            expiresAt: body.subscription.expiresAt ? new Date(body.subscription.expiresAt) : null,
+          }
+        });
+      }
+
       return NextResponse.json({
         success: true,
         profile: {
@@ -390,6 +435,30 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: `Database update failed: ${dbErr.message}` }, { status: 500 });
     }
   } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// DELETE: Delete user profile and all internal app data (DO NOT touch auth.users)
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = await createServerClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
+      return NextResponse.json({ error: "Unauthorized access: Session invalid" }, { status: 401 });
+    }
+
+    const userId = user.id;
+
+    // Delete User record from PostgreSQL (Cascade delete will clean up Profile, Photo, Like, Match, Message, ConversationParticipant, Conversation if orphan, Report, Block, Subscription)
+    // CRITICAL: We DO NOT modify, delete, or touch auth.users or any Supabase auth tables.
+    await prisma.user.delete({
+      where: { id: userId }
+    });
+
+    return NextResponse.json({ success: true, message: "Perfil interno eliminado correctamente." });
+  } catch (err: any) {
+    console.error("[DELETE PROFILE] Error:", err.message);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

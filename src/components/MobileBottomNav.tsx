@@ -2,32 +2,27 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { supabase } from "../lib/supabase/client";
 import { Locale } from "../lib/i18n";
 
 interface MobileBottomNavProps {
   currentLang: Locale;
-  active?: "discover" | "likes" | "chat" | "profile";
+  active?: "discover" | "likes" | "chat" | "vip" | "options";
 }
 
 export default function MobileBottomNav({ currentLang, active }: MobileBottomNavProps) {
   const [unreadChats, setUnreadChats] = useState(0);
   const [pendingLikes, setPendingLikes] = useState(0);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
+    const user = localStorage.getItem("veloura_user");
+    setIsLoggedIn(!!user);
+
     const matches = JSON.parse(localStorage.getItem("veloura_matches") || "[]");
     setUnreadChats(matches.length);
     const likes = JSON.parse(localStorage.getItem("veloura_likes_received") || "[]");
     setPendingLikes(likes.length);
   }, []);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut().catch(() => {});
-    document.cookie = "veloura-auth-session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-    localStorage.removeItem("veloura_user");
-    window.location.href = `/${currentLang}/login`;
-  };
 
   const tabs = [
     {
@@ -63,14 +58,24 @@ export default function MobileBottomNav({ currentLang, active }: MobileBottomNav
       badge: unreadChats,
     },
     {
-      id: "profile",
-      href: `/${currentLang}/profile`,
+      id: "vip",
+      href: `/${currentLang}/vip`,
       icon: (active?: string) => (
-        <svg viewBox="0 0 24 24" className="w-5 h-5" fill={active === "profile" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={active === "profile" ? 0 : 2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        <svg viewBox="0 0 24 24" className="w-5 h-5" fill={active === "vip" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={active === "vip" ? 0 : 2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z" />
         </svg>
       ),
-      label: currentLang === "es" ? "Perfil" : (currentLang === "ru" ? "Профиль" : "Profile"),
+      label: "VIP",
+    },
+    {
+      id: "options",
+      href: `/${currentLang}/options`,
+      icon: (active?: string) => (
+        <svg viewBox="0 0 24 24" className="w-5 h-5" fill={active === "options" ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      ),
+      label: currentLang === "es" ? "Opciones" : (currentLang === "ru" ? "Опции" : "Options"),
     },
   ];
 
@@ -79,14 +84,25 @@ export default function MobileBottomNav({ currentLang, active }: MobileBottomNav
       className="fixed bottom-0 left-0 right-0 z-50 bg-[#0A1128]/95 backdrop-blur-xl border-t border-white/10 safe-area-pb"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 8px)" }}
     >
-      <div className="flex justify-around items-center h-16 max-w-lg mx-auto px-2">
+      <div className="flex justify-around items-center h-16 max-w-lg mx-auto px-1">
         {tabs.map((tab) => {
           const isActive = active === tab.id;
+          const isPrivateTab = tab.id !== "discover";
+          const requiresLogin = isPrivateTab && !isLoggedIn;
+
+          const handleTabClick = (e: React.MouseEvent) => {
+            if (requiresLogin) {
+              e.preventDefault();
+              window.location.href = `/${currentLang}/login`;
+            }
+          };
+
           return (
             <Link
               key={tab.id}
               href={tab.href}
-              className={`relative flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-2xl transition-all duration-200 min-w-[56px] ${
+              onClick={handleTabClick}
+              className={`relative flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-2xl transition-all duration-200 min-w-[56px] ${
                 isActive
                   ? "text-primary"
                   : "text-muted hover:text-white"
@@ -109,19 +125,6 @@ export default function MobileBottomNav({ currentLang, active }: MobileBottomNav
             </Link>
           );
         })}
-
-        {/* Logout button */}
-        <button
-          onClick={handleLogout}
-          className="flex flex-col items-center justify-center gap-0.5 px-3 py-2 rounded-2xl text-muted hover:text-red-400 transition min-w-[56px]"
-        >
-          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          <span className="text-[9px] font-semibold">
-            {currentLang === "es" ? "Salir" : (currentLang === "ru" ? "Выйти" : "Exit")}
-          </span>
-        </button>
       </div>
     </nav>
   );

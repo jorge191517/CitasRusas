@@ -402,7 +402,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, swipe, isMatch: false });
   } catch (err: any) {
-    console.error("[POST MATCHES] Error:", err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("[POST MATCHES] Error:", err.stack || err.message);
+    return NextResponse.json({ error: err.message, stack: err.stack }, { status: 500 });
   }
 }

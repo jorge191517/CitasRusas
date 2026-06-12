@@ -221,16 +221,13 @@ export default function DashboardPage() {
           ? "Has alcanzado el límite de likes. Consigue VIP para continuar."
           : "You've reached the like limit. Get VIP to continue.");
       } else {
-        // Chat directly via forceMatch didn't work (API error), fallback to alert
         alert(currentLang === "es"
-          ? "No se pudo iniciar el chat ahora mismo. Inténtalo de nuevo."
-          : "Could not start chat right now. Please try again.");
+          ? `No se pudo iniciar el chat: ${JSON.stringify(resData.error) || "Error desconocido"}`
+          : `Could not start chat: ${JSON.stringify(resData.error) || "Unknown error"}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error opening chat:", err);
-      alert(currentLang === "es"
-        ? "No se pudo iniciar el chat. Inténtalo de nuevo."
-        : "Could not start chat. Please try again.");
+      alert(`No se pudo iniciar el chat. Inténtalo de nuevo. Error: ${err.message}`);
     }
   };
 
@@ -395,38 +392,7 @@ export default function DashboardPage() {
               })}
             </div>
 
-            {/* Usuarios en línea */}
-            <div className="w-full mb-4">
-              <p className="text-[10px] uppercase tracking-wider text-muted font-bold mb-2 ml-1">Usuarios en línea</p>
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                {profiles.slice().reverse().slice(0, 10).map((p, i) => (
-                  <div key={`online-${p.id}-${i}`} className="flex flex-col items-center gap-1 flex-shrink-0 cursor-pointer" onClick={() => {
-                    // Si el usuario hace click en un usuario en línea, lo buscamos en los perfiles filtrados
-                    // Si no está, quitamos el filtro.
-                    let targetIdx = displayedProfiles.findIndex(prof => prof.id === p.id);
-                    if (targetIdx === -1) {
-                      setFilterCountry("");
-                      const newIdx = profiles.findIndex(prof => prof.id === p.id);
-                      if (newIdx !== -1) setCurrentIndex(newIdx);
-                    } else {
-                      setCurrentIndex(targetIdx);
-                    }
-                  }}>
-                    <div className="relative">
-                      <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-[#D4A373] to-[#FF6B8B]">
-                        {p.imageUrl ? (
-                          <img src={p.imageUrl} alt={p.firstName} className="w-full h-full rounded-full object-cover border-2 border-background" />
-                        ) : (
-                          <div className="w-full h-full rounded-full bg-[#151F3C] border-2 border-background flex items-center justify-center text-primary/50 text-xs">👤</div>
-                        )}
-                      </div>
-                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full"></div>
-                    </div>
-                    <span className="text-[9px] text-white font-medium flex items-center gap-0.5">{p.firstName} {getFlag(p.country)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Usuarios en línea eliminados para no mostrar datos falsos */}
           </>
         )}
 

@@ -111,7 +111,20 @@ export async function GET(req: NextRequest) {
     });
     const swipedUserIds = allSentSwipes.map(l => l.receiverId);
 
+    const unreadMessagesCount = await prisma.message.count({
+      where: {
+        conversation: {
+          participants: {
+            some: { userId: authUserId }
+          }
+        },
+        senderId: { not: authUserId },
+        isRead: false
+      }
+    });
+
     return NextResponse.json({
+      unreadMessagesCount,
       success: true,
       sentLikes: sentLikes.map(l => ({
         id: l.receiver.id,

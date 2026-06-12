@@ -50,6 +50,16 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "asc" }
     });
 
+    // Mark as read
+    await prisma.message.updateMany({
+      where: {
+        conversationId,
+        senderId: { not: user.id },
+        isRead: false
+      },
+      data: { isRead: true }
+    });
+
     return NextResponse.json({ success: true, messages });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

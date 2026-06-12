@@ -475,7 +475,6 @@ function ChatContent() {
                                 </div>
                               )}
                             </div>
-                            <span className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-background" />
                           </div>
 
                           {/* Content */}
@@ -532,7 +531,6 @@ function ChatContent() {
                       {activeMatch.firstName}
                       {activeMatch.verified && <span className="ml-1 text-primary text-[10px]">✓</span>}
                     </p>
-                    <p className="text-[10px] text-green-400 font-medium">● {t("chat.online")}</p>
                   </div>
 
                   {/* 3-dots Menu Button */}

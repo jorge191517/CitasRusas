@@ -117,7 +117,7 @@ export default function DashboardPage() {
     checkAuth();
   }, [currentLang]);
 
-  const handleSendMessageClick = (profileId: string) => {
+  const handleSendMessageClick = async (profileId: string) => {
     if (!session) {
       setShowAuthModal(true);
       return;
@@ -126,7 +126,33 @@ export default function DashboardPage() {
     if (match && match.conversationId) {
       window.location.href = `/${currentLang}/chat?conversationId=${match.conversationId}`;
     } else {
-      alert(currentLang === "es" ? "Necesitas un match para enviar mensajes." : "You need a match to send messages.");
+      try {
+        const res = await fetch("/api/matches", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            receiverId: profileId,
+            type: "LIKE",
+            forceMatch: true
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.isMatch && data.match && data.match.conversationId) {
+            window.location.href = `/${currentLang}/chat?conversationId=${data.match.conversationId}`;
+          } else {
+            alert("Error al iniciar el chat.");
+          }
+        } else {
+          alert("Error al iniciar el chat.");
+        }
+      } catch (err) {
+        console.error("Error direct messaging:", err);
+        alert("Error al iniciar el chat.");
+      }
     }
   };
 
@@ -398,6 +424,14 @@ export default function DashboardPage() {
                 style={{ background: "linear-gradient(135deg, #D4A373, #FF6B8B)" }}
               >
                 ♥
+              </button>
+
+              {/* Direct Message */}
+              <button
+                onClick={() => handleSendMessageClick(activeProfile.id)}
+                className="w-12 h-12 rounded-full bg-[#151F3C] border border-[#D4A373]/30 hover:bg-[#D4A373]/15 flex items-center justify-center text-[#D4A373] hover:scale-110 active:scale-95 transition-all shadow-md"
+              >
+                💬
               </button>
 
               {/* Info */}

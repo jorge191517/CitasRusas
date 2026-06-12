@@ -220,6 +220,54 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Direct Message Shortcut: if forceMatch is true, instantly create match & conversation
+    if (body.forceMatch === true) {
+      const u1 = authUserId < receiverId ? authUserId : receiverId;
+      const u2 = authUserId < receiverId ? receiverId : authUserId;
+
+      await prisma.like.upsert({
+        where: { senderId_receiverId: { senderId: authUserId, receiverId } },
+        update: { type: "LIKE" },
+        create: { senderId: authUserId, receiverId, type: "LIKE" }
+      });
+      await prisma.like.upsert({
+        where: { senderId_receiverId: { senderId: receiverId, receiverId: authUserId } },
+        update: { type: "LIKE" },
+        create: { senderId: receiverId, receiverId: authUserId, type: "LIKE" }
+      });
+
+      const match = await prisma.match.upsert({
+        where: {
+          user1Id_user2Id: { user1Id: u1, user2Id: u2 }
+        },
+        update: {},
+        create: {
+          user1Id: u1,
+          user2Id: u2,
+          conversation: {
+            create: {}
+          }
+        },
+        include: { conversation: true }
+      });
+
+      if (match.conversationId) {
+        await prisma.conversationParticipant.upsert({
+          where: { conversationId_userId: { conversationId: match.conversationId, userId: u1 } },
+          update: {},
+          create: { conversationId: match.conversationId, userId: u1 }
+        }).catch(() => {});
+
+        await prisma.conversationParticipant.upsert({
+          where: { conversationId_userId: { conversationId: match.conversationId, userId: u2 } },
+          update: {},
+          create: { conversationId: match.conversationId, userId: u2 }
+        }).catch(() => {});
+      }
+
+      return NextResponse.json({ success: true, match, isMatch: true });
+    }
+
     // 4. Create or update Swipe/Like record
     const swipe = await prisma.like.upsert({
       where: {

@@ -59,6 +59,8 @@ export default function ChatPage() {
   // Guest State
   const [isGuest, setIsGuest] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isVip, setIsVip] = useState(false);
+  const [showVipModal, setShowVipModal] = useState(false);
 
   // Dropdown / Modal state
   const [showMenu, setShowMenu] = useState(false);
@@ -86,6 +88,19 @@ export default function ChatPage() {
       const stored = localStorage.getItem("veloura_user");
       if (stored) {
         setCurrentUser(JSON.parse(stored));
+      }
+
+      // Fetch profile to verify VIP status
+      try {
+        const profileRes = await fetch("/api/profile", {
+          headers: { "Authorization": `Bearer ${currentSession.access_token}` }
+        });
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          setIsVip(profileData.subscription?.tier === "PREMIUM" && profileData.subscription?.isActive);
+        }
+      } catch (err) {
+        console.error("Error reading VIP status in ChatPage:", err);
       }
 
       fetchMatches(currentSession);
@@ -408,7 +423,7 @@ export default function ChatPage() {
                     <p className="text-xs text-muted mt-2">Cargando conversaciones...</p>
                   </div>
                 ) : matches.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full py-20 space-y-4 px-6">
+                  <div className="flex flex-col items-center justify-center h-full py-20 space-y-5 px-6 text-center">
                     <span className="text-5xl">💬</span>
                     <h3 className="font-bold text-white text-base">
                       {currentLang === "es" ? "Sin conversaciones aún" : "No conversations yet"}
@@ -418,6 +433,12 @@ export default function ChatPage() {
                         ? "Cuando consigas un match con alguien, tu conversación aparecerá aquí automáticamente."
                         : "Once you get a match, your conversation will appear here automatically."}
                     </p>
+                    <Link
+                      href={`/${currentLang}/dashboard`}
+                      className="px-6 py-3 bg-gradient-to-r from-[#D4A373] to-[#FF6B8B] text-background font-black rounded-xl text-xs shadow-md transition hover:scale-105 active:scale-95"
+                    >
+                      {currentLang === "es" ? "Descubrir perfiles" : "Discover profiles"}
+                    </Link>
                   </div>
                 ) : (
                   <ul className="divide-y divide-white/5">
@@ -600,8 +621,31 @@ export default function ChatPage() {
 
                 {/* Input Panel */}
                 <form onSubmit={handleSend} className="flex gap-2 px-4 py-3 border-t border-white/10 bg-[#0D1530]/80 backdrop-blur-sm relative z-20">
-                  <button type="button" className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-muted hover:bg-white/10 transition text-base">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isVip) {
+                        setShowVipModal(true);
+                      } else {
+                        alert(currentLang === "es" ? "La subida de archivos VIP estará disponible próximamente." : "VIP media uploads will be available soon.");
+                      }
+                    }}
+                    className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-muted hover:bg-white/10 transition text-base"
+                  >
                     🖼️
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!isVip) {
+                        setShowVipModal(true);
+                      } else {
+                        alert(currentLang === "es" ? "La grabación de audio VIP estará disponible próximamente." : "VIP audio recording will be available soon.");
+                      }
+                    }}
+                    className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center text-muted hover:bg-white/10 transition text-base"
+                  >
+                    🎙️
                   </button>
                   <input
                     type="text"
@@ -714,6 +758,38 @@ export default function ChatPage() {
             >
               Seguir explorando perfiles
             </Link>
+          </div>
+        </div>
+      )}
+
+      {/* ── VIP MULTIMEDIA MODAL ── */}
+      {showVipModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="glass max-w-sm w-full p-6 rounded-3xl border border-primary/20 text-center space-y-5">
+            <span className="text-5xl block">👑</span>
+            <h3 className="text-xl font-bold text-white">
+              {currentLang === "es" ? "Función VIP requerida" : "VIP Feature Required"}
+            </h3>
+            <p className="text-xs text-muted leading-relaxed">
+              {currentLang === "es"
+                ? "Los mensajes multimedia estarán disponibles en VIP. Envía fotos, audios y vídeos ilimitados activando la membresía gratis."
+                : "Multimedia messages are only available for VIP members. Send unlimited photos, voice notes, and videos by activating the free membership."}
+            </p>
+            <div className="flex flex-col gap-2.5">
+              <Link
+                href={`/${currentLang}/vip`}
+                className="w-full py-3 bg-premium-gold text-background font-bold rounded-xl text-center text-sm shadow-md"
+                onClick={() => setShowVipModal(false)}
+              >
+                {currentLang === "es" ? "Conseguir VIP Gratis" : "Get Free VIP"}
+              </Link>
+              <button
+                onClick={() => setShowVipModal(false)}
+                className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-semibold rounded-xl text-center text-sm"
+              >
+                {currentLang === "es" ? "Cerrar" : "Close"}
+              </button>
+            </div>
           </div>
         </div>
       )}

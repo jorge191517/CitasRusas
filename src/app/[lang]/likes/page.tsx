@@ -26,6 +26,7 @@ export default function LikesPage() {
   const [isGuest, setIsGuest] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [matchedProfile, setMatchedProfile] = useState<any>(null);
+  const [dbMatches, setDbMatches] = useState<any[]>([]);
 
   useEffect(() => {
     const init = async () => {
@@ -68,6 +69,7 @@ export default function LikesPage() {
         const data = await res.json();
         setReceivedLikes(data.receivedLikes || []);
         setSentLikes(data.sentLikes || []);
+        setDbMatches(data.matches || []);
         
         // Mock visitors for visual premium effect
         if (data.receivedLikes && data.receivedLikes.length > 0) {
@@ -276,15 +278,32 @@ export default function LikesPage() {
                         <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
                           <p className="font-bold text-sm text-white">{profile.firstName}, {profile.age}</p>
                           <p className="text-[10px] text-white/70">📍 {profile.country}</p>
-                          {activeTab === "received" && (
-                            <span className="inline-block mt-1 px-2 py-0.5 bg-[#FF6B8B]/25 text-[#FF6B8B] rounded-full text-[9px] font-bold">
-                              ♥ {currentLang === "es" ? "Le gustas" : "Likes you"}
-                            </span>
-                          )}
-                          {activeTab === "visitors" && (
-                            <span className="inline-block mt-1 px-2 py-0.5 bg-blue-400/20 text-blue-400 rounded-full text-[9px] font-bold">
-                              👁️ {currentLang === "es" ? "Visitó tu perfil" : "Visited your profile"}
-                            </span>
+                          {dbMatches.some(m => m.id === profile.id) ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const m = dbMatches.find(m => m.id === profile.id);
+                                if (m && m.conversationId) {
+                                  window.location.href = `/${currentLang}/chat?conversationId=${m.conversationId}`;
+                                }
+                              }}
+                              className="mt-1.5 w-full py-1 bg-gradient-to-r from-[#D4A373] to-[#FF6B8B] text-background text-[10px] font-black rounded-lg shadow-md flex items-center justify-center gap-1 hover:scale-105 transition"
+                            >
+                              💬 Enviar mensaje
+                            </button>
+                          ) : (
+                            <>
+                              {activeTab === "received" && (
+                                <span className="inline-block mt-1 px-2 py-0.5 bg-[#FF6B8B]/25 text-[#FF6B8B] rounded-full text-[9px] font-bold">
+                                  ♥ {currentLang === "es" ? "Le gustas" : "Likes you"}
+                                </span>
+                              )}
+                              {activeTab === "visitors" && (
+                                <span className="inline-block mt-1 px-2 py-0.5 bg-blue-400/20 text-blue-400 rounded-full text-[9px] font-bold">
+                                  👁️ {currentLang === "es" ? "Visitó tu perfil" : "Visited your profile"}
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
                       )}

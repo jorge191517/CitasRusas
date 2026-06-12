@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Locale } from "../lib/i18n";
+import { supabase } from "../lib/supabase/client";
 
 interface MobileBottomNavProps {
   currentLang: Locale;
@@ -18,10 +19,30 @@ export default function MobileBottomNav({ currentLang, active }: MobileBottomNav
     const user = localStorage.getItem("veloura_user");
     setIsLoggedIn(!!user);
 
-    const matches = JSON.parse(localStorage.getItem("veloura_matches") || "[]");
-    setUnreadChats(matches.length);
-    const likes = JSON.parse(localStorage.getItem("veloura_likes_received") || "[]");
-    setPendingLikes(likes.length);
+    const fetchCounts = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const res = await fetch("/api/matches", {
+          headers: { "Authorization": `Bearer ${session.access_token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUnreadChats(data.matches?.length || 0);
+          setPendingLikes(data.receivedLikes?.length || 0);
+        }
+      } catch (err) {
+        console.error("Error fetching badge counts in nav:", err);
+      }
+    };
+
+    if (user) {
+      fetchCounts();
+    } else {
+      setUnreadChats(0);
+      setPendingLikes(0);
+    }
   }, []);
 
   const tabs = [

@@ -40,6 +40,8 @@ export default function DashboardPage() {
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [showVipModal, setShowVipModal] = useState(false);
   const [session, setSession] = useState<any>(null);
+  const [dbMatches, setDbMatches] = useState<any[]>([]);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -68,6 +70,19 @@ export default function DashboardPage() {
           setLikesCount(profileData?.likesCount || 0);
           setIsVip(profileData?.subscription?.tier === "PREMIUM" && profileData?.subscription?.isActive);
           setBlockedUserIds(profileData?.blockedUserIds || []);
+
+          // Fetch matches to know if there's a match
+          try {
+            const matchesRes = await fetch("/api/matches", {
+              headers: { Authorization: `Bearer ${currentSession.access_token}` },
+            });
+            if (matchesRes.ok) {
+              const matchesData = await matchesRes.json();
+              setDbMatches(matchesData.matches || []);
+            }
+          } catch (mErr) {
+            console.error("Error fetching db matches:", mErr);
+          }
         }
       } catch (_) {}
 
@@ -101,6 +116,19 @@ export default function DashboardPage() {
 
     checkAuth();
   }, [currentLang]);
+
+  const handleSendMessageClick = (profileId: string) => {
+    if (!session) {
+      setShowAuthModal(true);
+      return;
+    }
+    const match = dbMatches.find((m) => m.id === profileId);
+    if (match && match.conversationId) {
+      window.location.href = `/${currentLang}/chat?conversationId=${match.conversationId}`;
+    } else {
+      alert(currentLang === "es" ? "Necesitas un match para enviar mensajes." : "You need a match to send messages.");
+    }
+  };
 
   const activeProfile = currentIndex < profiles.length ? profiles[currentIndex] : null;
 
@@ -264,6 +292,24 @@ export default function DashboardPage() {
               {/* Gradient overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-[#0A1128] via-[#0A1128]/30 to-transparent" />
 
+              {/* If already matched, show "Send Message" shortcut */}
+              {session && dbMatches.some(m => m.id === activeProfile.id) && (
+                <div className="absolute top-4 left-4 z-20">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const m = dbMatches.find(m => m.id === activeProfile.id);
+                      if (m && m.conversationId) {
+                        window.location.href = `/${currentLang}/chat?conversationId=${m.conversationId}`;
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-gradient-to-r from-[#D4A373] to-[#FF6B8B] text-background text-[10px] font-black rounded-full shadow-md flex items-center gap-1 hover:scale-105 active:scale-95 transition"
+                  >
+                    💬 Enviar mensaje
+                  </button>
+                </div>
+              )}
+
               {/* Verified badge top */}
               {activeProfile.verified && (
                 <div className="absolute top-4 right-4 px-2.5 py-1 bg-black/50 backdrop-blur-md rounded-full flex items-center gap-1 border border-primary/30">
@@ -356,10 +402,7 @@ export default function DashboardPage() {
 
               {/* Info */}
               <button
-                onClick={() => {
-                  const el = document.getElementById("profile-detail-modal");
-                  if (el) el.classList.remove("hidden");
-                }}
+                onClick={() => setShowDetailModal(true)}
                 className="w-12 h-12 rounded-full bg-[#151F3C] border border-white/10 hover:bg-white/10 flex items-center justify-center text-muted hover:text-white transition-all shadow-md"
               >
                 ℹ️
@@ -540,6 +583,104 @@ export default function DashboardPage() {
                 className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-semibold rounded-xl text-center text-sm"
               >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Detail Modal */}
+      {showDetailModal && activeProfile && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm p-0 animate-fade-in">
+          <div className="w-full max-w-lg bg-[#0A1128] border-t border-primary/20 rounded-t-[32px] overflow-hidden max-h-[90vh] flex flex-col relative animate-slide-up">
+            {/* Header Image */}
+            <div className="relative h-64 shrink-0">
+              {activeProfile.imageUrl ? (
+                <img src={activeProfile.imageUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-[#151F3C] flex items-center justify-center text-primary font-bold text-5xl">👤</div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0A1128] to-transparent" />
+              <button
+                onClick={() => setShowDetailModal(false)}
+                className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/60 text-white flex items-center justify-center font-bold text-lg hover:bg-black/80 transition"
+              >
+                ✕
+              </button>
+
+              {/* Verified badge */}
+              {activeProfile.verified && (
+                <div className="absolute top-4 left-4 px-2.5 py-1 bg-black/50 backdrop-blur-md rounded-full border border-primary/30">
+                  <span className="text-primary text-[10px] font-bold">✓ VERIFICADA</span>
+                </div>
+              )}
+            </div>
+
+            {/* Profile Content */}
+            <div className="flex-1 overflow-y-auto px-6 pb-28 pt-4 space-y-4">
+              <div>
+                <h2 className="text-2xl font-black text-white">
+                  {activeProfile.firstName}, {activeProfile.age}
+                </h2>
+                <p className="text-sm text-muted mt-0.5">📍 {activeProfile.city || activeProfile.country}</p>
+              </div>
+
+              {activeProfile.lookingFor && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted">Buscando:</span>
+                  <span className="px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-lg text-xs font-bold text-primary">
+                    {LOOKING_FOR_LABELS[activeProfile.lookingFor] || activeProfile.lookingFor}
+                  </span>
+                </div>
+              )}
+
+              {activeProfile.profession && (
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold text-muted uppercase tracking-wider">Profesión / Ocupación</h4>
+                  <p className="text-sm text-white">💼 {activeProfile.profession}</p>
+                </div>
+              )}
+
+              {activeProfile.bio && (
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold text-muted uppercase tracking-wider">Sobre mí</h4>
+                  <p className="text-sm text-white/90 leading-relaxed italic">"{activeProfile.bio}"</p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-muted uppercase tracking-wider">Intereses</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {activeProfile.interests.map((i) => (
+                    <span key={i} className="px-3 py-1 bg-[#FF6B8B]/10 border border-[#FF6B8B]/15 text-[#FF6B8B] rounded-full text-xs font-semibold">
+                      #{i}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-muted uppercase tracking-wider">Idiomas</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {activeProfile.languages.map((l) => (
+                    <span key={l} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs uppercase font-bold text-white">
+                      {l}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sticky Action Footer */}
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#0A1128] via-[#0A1128] to-transparent pt-8 flex gap-3 z-20">
+              <button
+                onClick={() => {
+                  setShowDetailModal(false);
+                  handleSendMessageClick(activeProfile.id);
+                }}
+                className="flex-1 py-4 bg-gradient-to-r from-[#D4A373] to-[#FF6B8B] hover:opacity-95 text-background font-black rounded-2xl text-center text-sm shadow-lg transform active:scale-95 transition"
+              >
+                💬 Enviar mensaje
               </button>
             </div>
           </div>

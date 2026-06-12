@@ -44,6 +44,28 @@ export default function DashboardPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
 
+  const getFlag = (country: string) => {
+    if (!country) return "";
+    const map: Record<string, string> = {
+      "españa": "🇪🇸", "spain": "🇪🇸",
+      "rusia": "🇷🇺", "russia": "🇷🇺",
+      "letonia": "🇱🇻", "latvia": "🇱🇻",
+      "ucrania": "🇺🇦", "ukraine": "🇺🇦",
+      "colombia": "🇨🇴", "china": "🇨🇳",
+      "méxico": "🇲🇽", "mexico": "🇲🇽",
+      "argentina": "🇦🇷", "perú": "🇵🇪", "peru": "🇵🇪",
+      "venezuela": "🇻🇪", "chile": "🇨🇱", "ecuador": "🇪🇨",
+      "eeuu": "🇺🇸", "estados unidos": "🇺🇸", "usa": "🇺🇸",
+      "francia": "🇫🇷", "france": "🇫🇷",
+      "italia": "🇮🇹", "italy": "🇮🇹",
+      "alemania": "🇩🇪", "germany": "🇩🇪",
+      "reino unido": "🇬🇧", "uk": "🇬🇧",
+      "japón": "🇯🇵", "japan": "🇯🇵",
+      "brasil": "🇧🇷", "brazil": "🇧🇷"
+    };
+    return map[country.toLowerCase().trim()] || "🏳️";
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       setLoadingProfiles(true);
@@ -51,10 +73,23 @@ export default function DashboardPage() {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         setSession(currentSession);
 
+        // Fetch real profiles from our DB instead of mock data
+        let discoverProfiles: DatingProfile[] = [];
+        try {
+          const discRes = await fetch("/api/discover", { cache: "no-store" });
+          if (discRes.ok) {
+            const discData = await discRes.json();
+            discoverProfiles = discData.profiles || [];
+          }
+        } catch (e) {
+          console.error("Error fetching discover profiles:", e);
+        }
+
         if (!currentSession) {
           localStorage.removeItem("veloura_user");
           setCurrentUser(null);
-          setProfiles(mockProfiles);
+          setProfiles(discoverProfiles);
+          setLoadingProfiles(false);
           return;
         }
 
@@ -74,7 +109,6 @@ export default function DashboardPage() {
             setIsVip(profileData?.subscription?.tier === "PREMIUM" && profileData?.subscription?.isActive);
             setBlockedUserIds(profileData?.blockedUserIds || []);
           } else if (res.status === 404) {
-            // User exists in Supabase Auth but has no DB profile yet
             apiCallSucceeded = true;
             profileCompleted = false;
             profileData = { profile: null };
@@ -84,13 +118,11 @@ export default function DashboardPage() {
           apiCallSucceeded = false;
         }
 
-        // Redirect to onboarding if profile is null or profileCompleted is false
         if (apiCallSucceeded && (profileData?.profile === null || profileData?.profile === undefined || !profileCompleted)) {
           window.location.replace(`/${currentLang}/onboarding`);
           return;
         }
 
-        // Fetch matches to get already swiped user IDs
         let swipedUserIds: string[] = [];
         try {
           const matchesRes = await fetch("/api/matches", {
@@ -120,10 +152,9 @@ export default function DashboardPage() {
         localStorage.setItem("veloura_user", JSON.stringify(userObj));
         setCurrentUser(userObj);
 
-        // Filter out blocked users, swiped users, and the current user's own profile
         const blocked = profileData?.blockedUserIds || [];
         const currentUserId = currentSession.user.id;
-        const filteredProfiles = mockProfiles.filter(p => 
+        const filteredProfiles = discoverProfiles.filter(p => 
           p.id !== currentUserId && 
           !blocked.includes(p.id) && 
           !swipedUserIds.includes(p.id)
@@ -383,11 +414,15 @@ export default function DashboardPage() {
                   }}>
                     <div className="relative">
                       <div className="w-12 h-12 rounded-full p-[2px] bg-gradient-to-tr from-[#D4A373] to-[#FF6B8B]">
-                        <img src={p.imageUrl} alt={p.firstName} className="w-full h-full rounded-full object-cover border-2 border-background" />
+                        {p.imageUrl ? (
+                          <img src={p.imageUrl} alt={p.firstName} className="w-full h-full rounded-full object-cover border-2 border-background" />
+                        ) : (
+                          <div className="w-full h-full rounded-full bg-[#151F3C] border-2 border-background flex items-center justify-center text-primary/50 text-xs">👤</div>
+                        )}
                       </div>
                       <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-background rounded-full"></div>
                     </div>
-                    <span className="text-[9px] text-white font-medium">{p.firstName}</span>
+                    <span className="text-[9px] text-white font-medium flex items-center gap-0.5">{p.firstName} {getFlag(p.country)}</span>
                   </div>
                 ))}
               </div>
@@ -472,8 +507,8 @@ export default function DashboardPage() {
                     <h2 className="text-2xl font-black text-white leading-none">
                       {activeProfile.firstName}, {activeProfile.age}
                     </h2>
-                    <p className="text-sm text-white/80 mt-0.5">
-                      📍 {activeProfile.city || activeProfile.country}
+                    <p className="text-sm text-white/80 mt-0.5 flex items-center gap-1">
+                      📍 {activeProfile.city || activeProfile.country} {getFlag(activeProfile.country)}
                     </p>
                   </div>
                   {activeProfile.lookingFor && (

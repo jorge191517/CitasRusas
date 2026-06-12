@@ -44,7 +44,7 @@ export const messageSchema = z.object({
 
 // 3. Like/Swipe Schema Validation
 export const likeSchema = z.object({
-  receiverId: z.string().uuid("Invalid receiver user ID"),
+  receiverId: z.string().min(1, "Invalid receiver user ID"),
   type: z.enum(["LIKE", "DISLIKE", "SUPER_LIKE"]),
 });
 

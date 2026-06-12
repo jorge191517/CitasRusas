@@ -3,6 +3,8 @@ import { prisma } from "../../../lib/db";
 import { createClient } from "../../../lib/supabase/server";
 import { likeSchema } from "../../../lib/validation";
 
+export const dynamic = "force-dynamic";
+
 // GET: Fetch matches and likes for the logged-in user, excluding blocked users
 export async function GET(req: NextRequest) {
   try {
@@ -232,6 +234,8 @@ export async function POST(req: NextRequest) {
               country: mockProf?.country || "España",
               city: mockProf?.city || "Madrid",
               mainPhotoUrl: mockProf?.imageUrl || "",
+              languages: mockProf?.languages || ["es"],
+              interests: mockProf?.interests || [],
               profileCompleted: true
             }
           }

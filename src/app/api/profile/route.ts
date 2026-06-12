@@ -4,6 +4,8 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "../../../lib/supabase/server";
 import { profileSchema } from "../../../lib/validation";
 
+export const dynamic = "force-dynamic";
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 

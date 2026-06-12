@@ -86,6 +86,7 @@ model Profile {
   interests      String[]       // Array of interests e.g., ["Music", "Travel"]
   hobbies        String[]       @default([]) // Array of hobbies
   lookingFor     String?        // friendship | relationship | serious | marriage | cultural
+  interestedIn   String?        // women | men | men_and_women | everyone
   height         Float?         // Height in cm
   mainPhotoUrl   String?        // Primary profile photo URL
   videoIntroUrl  String?        // Optional video presentation url (max 40s)

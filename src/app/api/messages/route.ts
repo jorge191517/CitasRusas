@@ -44,11 +44,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized conversation access" }, { status: 403 });
     }
 
-    // Fetch messages
-    const messages = await prisma.message.findMany({
+    // Fetch messages (latest 50)
+    const messagesDesc = await prisma.message.findMany({
       where: { conversationId },
-      orderBy: { createdAt: "asc" }
+      orderBy: { createdAt: "desc" },
+      take: 50
     });
+    const messages = messagesDesc.reverse();
 
     // Mark as read
     await prisma.message.updateMany({

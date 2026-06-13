@@ -1,16 +1,19 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Locale, getTranslation } from "../../../lib/i18n";
 import { DatingProfile } from "../../../components/TinderCard";
 import AppHeader from "../../../components/AppHeader";
 import MobileBottomNav from "../../../components/MobileBottomNav";
+import { LikesGridSkeleton } from "../../../components/Skeleton";
 import { supabase } from "../../../lib/supabase/client";
+import { getOptimizedSupabaseImageUrl } from "../../../lib/image-utils";
 
 export default function LikesPage() {
   const params = useParams();
+  const router = useRouter();
   const currentLang = (params.lang as Locale) || "es";
   const t = getTranslation(currentLang);
 
@@ -191,10 +194,7 @@ export default function LikesPage() {
 
             {/* Content list */}
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-20">
-                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                <p className="text-xs text-muted mt-2">Cargando...</p>
-              </div>
+              <LikesGridSkeleton />
             ) : currentList.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 space-y-4">
                 <span className="text-5xl">{activeTab === "received" ? "💌" : activeTab === "sent" ? "💛" : "👁️"}</span>
@@ -284,7 +284,7 @@ export default function LikesPage() {
                                 e.stopPropagation();
                                 const m = dbMatches.find(m => m.id === profile.id);
                                 if (m && m.conversationId) {
-                                  window.location.href = `/${currentLang}/chat?conversationId=${m.conversationId}`;
+                                  router.push(`/${currentLang}/chat?conversationId=${m.conversationId}`);
                                 }
                               }}
                               className="mt-1.5 w-full py-1 bg-gradient-to-r from-[#D4A373] to-[#FF6B8B] text-background text-[10px] font-black rounded-lg shadow-md flex items-center justify-center gap-1 hover:scale-105 transition"
@@ -335,11 +335,11 @@ export default function LikesPage() {
             </p>
             <div className="flex justify-center gap-0 py-3">
               <div className="w-20 h-20 rounded-full border-4 border-primary bg-[#151F3C] overflow-hidden">
-                {matchedProfile.imageUrl && <img src={matchedProfile.imageUrl} alt="" className="w-full h-full object-cover" />}
+                {matchedProfile.imageUrl && <img src={getOptimizedSupabaseImageUrl(matchedProfile.imageUrl, 600, 800)} alt="" className="w-full h-full object-cover" />}
               </div>
             </div>
             <button
-              onClick={() => { setMatchedProfile(null); window.location.href = `/${currentLang}/chat`; }}
+              onClick={() => { setMatchedProfile(null); router.push(`/${currentLang}/chat`); }}
               className="w-full py-4 font-bold rounded-2xl text-white text-sm shadow-md"
               style={{ background: "linear-gradient(135deg, #D4A373, #FF6B8B)" }}
             >

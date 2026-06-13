@@ -25,9 +25,7 @@ export async function GET(req: NextRequest) {
 
     const dbProfiles = await prisma.profile.findMany({
       where: whereClause,
-      include: {
-        user: true,
-      },
+      take: 20,
       orderBy: { createdAt: 'desc' }
     });
 

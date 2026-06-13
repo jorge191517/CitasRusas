@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Locale, getTranslation } from "../../../lib/i18n";
+import { DatingProfile } from "../../../components/TinderCard";
+import { getOptimizedSupabaseImageUrl } from "../../../lib/image-utils";
 import AppHeader from "../../../components/AppHeader";
 import MobileBottomNav from "../../../components/MobileBottomNav";
 import { supabase } from "../../../lib/supabase/client";
@@ -330,7 +332,7 @@ export default function ProfilePage() {
           {/* Photo background */}
           {mainPhotoUrl ? (
             <img
-              src={mainPhotoUrl}
+              src={getOptimizedSupabaseImageUrl(mainPhotoUrl, 600, 800)}
               alt={firstName}
               className="absolute inset-0 w-full h-full object-cover"
               onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
@@ -432,7 +434,7 @@ export default function ProfilePage() {
             {mainPhotoUrl ? (
               <div className="relative aspect-square rounded-2xl overflow-hidden border-2 border-primary/40">
                 <img
-                  src={mainPhotoUrl}
+                  src={getOptimizedSupabaseImageUrl(mainPhotoUrl, 180, 180)}
                   alt="Main"
                   className="w-full h-full object-cover"
                   onError={(e) => {
@@ -455,7 +457,7 @@ export default function ProfilePage() {
 
             {photos.map((url, i) => (
               <div key={i} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10">
-                <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                <img src={getOptimizedSupabaseImageUrl(url, 180, 180)} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
                 <button
                   onClick={async (e) => {
                     e.stopPropagation();

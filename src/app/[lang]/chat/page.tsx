@@ -7,7 +7,9 @@ import { Locale, getTranslation } from "../../../lib/i18n";
 import { DatingProfile } from "../../../components/TinderCard";
 import AppHeader from "../../../components/AppHeader";
 import MobileBottomNav from "../../../components/MobileBottomNav";
+import { ChatListSkeleton } from "../../../components/Skeleton";
 import { supabase } from "../../../lib/supabase/client";
+import { getOptimizedSupabaseImageUrl } from "../../../lib/image-utils";
 
 interface ChatMessage {
   id: string;
@@ -431,10 +433,7 @@ function ChatContent() {
             {showList && (
               <div className="flex-1 overflow-y-auto">
                 {loadingMatches ? (
-                  <div className="flex flex-col items-center justify-center h-full py-20">
-                    <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    <p className="text-xs text-muted mt-2">Cargando conversaciones...</p>
-                  </div>
+                  <ChatListSkeleton />
                 ) : matches.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full py-20 space-y-5 px-6 text-center">
                     <span className="text-5xl">💬</span>
@@ -465,7 +464,7 @@ function ChatContent() {
                           <div className="relative shrink-0">
                             <div className="w-14 h-14 rounded-full overflow-hidden bg-[#151F3C] border-2 border-primary/20">
                               {m.imageUrl ? (
-                                <img src={m.imageUrl} alt={m.firstName} className="w-full h-full object-cover" />
+                                <img src={getOptimizedSupabaseImageUrl(m.imageUrl, 96, 96)} alt={m.firstName} className="w-full h-full object-cover" />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center">
                                   <svg viewBox="0 0 100 100" className="w-8 h-8 text-primary/40">
@@ -515,7 +514,7 @@ function ChatContent() {
 
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-[#151F3C] border border-primary/20 shrink-0">
                     {activeMatch.imageUrl ? (
-                      <img src={activeMatch.imageUrl} alt={activeMatch.firstName} className="w-full h-full object-cover" />
+                      <img src={getOptimizedSupabaseImageUrl(activeMatch.imageUrl, 80, 80)} alt={activeMatch.firstName} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <svg viewBox="0 0 100 100" className="w-6 h-6 text-primary/40">
@@ -591,7 +590,7 @@ function ChatContent() {
                           {!isMine && (
                             <div className="w-7 h-7 rounded-full overflow-hidden bg-[#151F3C] border border-primary/20 mr-2 shrink-0 self-end">
                               {activeMatch.imageUrl ? (
-                                <img src={activeMatch.imageUrl} alt="" className="w-full h-full object-cover" />
+                                <img src={getOptimizedSupabaseImageUrl(activeMatch.imageUrl, 80, 80)} alt="" className="w-full h-full object-cover" />
                               ) : (
                                 <div className="w-full h-full bg-primary/10 flex items-center justify-center text-[8px] text-primary">👤</div>
                               )}
@@ -618,7 +617,7 @@ function ChatContent() {
                   {isTyping && (
                     <div className="flex justify-start items-end gap-2">
                       <div className="w-7 h-7 rounded-full overflow-hidden bg-[#151F3C] border border-primary/20 shrink-0">
-                        {activeMatch.imageUrl && <img src={activeMatch.imageUrl} alt="" className="w-full h-full object-cover" />}
+                        {activeMatch.imageUrl && <img src={getOptimizedSupabaseImageUrl(activeMatch.imageUrl, 80, 80)} alt="" className="w-full h-full object-cover" />}
                       </div>
                       <div className="bg-[#151F3C] border border-white/5 px-4 py-3 rounded-2xl rounded-tl-none flex gap-1.5">
                         <span className="w-1.5 h-1.5 bg-muted rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />

@@ -1,14 +1,16 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { Locale, getTranslation } from "../../../lib/i18n";
 import { DatingProfile } from "../../../components/TinderCard";
 import { mockProfiles } from "../../../lib/mockData";
 import AppHeader from "../../../components/AppHeader";
 import MobileBottomNav from "../../../components/MobileBottomNav";
+import { ProfileCardSkeleton } from "../../../components/Skeleton";
 import { supabase } from "../../../lib/supabase/client";
+import { getOptimizedSupabaseImageUrl } from "../../../lib/image-utils";
 
 const LOOKING_FOR_LABELS: Record<string, string> = {
   friendship: "Amistad",
@@ -20,6 +22,7 @@ const LOOKING_FOR_LABELS: Record<string, string> = {
 
 export default function DashboardPage() {
   const params = useParams();
+  const router = useRouter();
   const currentLang = (params.lang as Locale) || "es";
   const t = getTranslation(currentLang);
 
@@ -184,7 +187,7 @@ export default function DashboardPage() {
 
     if (existingMatch && existingMatch.conversationId) {
       // ✅ Real match with conversation — open chat directly
-      window.location.href = `/${currentLang}/chat?conversationId=${existingMatch.conversationId}`;
+      router.push(`/${currentLang}/chat?conversationId=${existingMatch.conversationId}`);
       return;
     }
 
@@ -210,7 +213,7 @@ export default function DashboardPage() {
 
       if (res.ok) {
         if (resData.isMatch && resData.match && resData.match.conversationId) {
-          window.location.href = `/${currentLang}/chat?conversationId=${resData.match.conversationId}`;
+          router.push(`/${currentLang}/chat?conversationId=${resData.match.conversationId}`);
           return;
         }
       }
@@ -398,11 +401,8 @@ export default function DashboardPage() {
 
         {/* ── MAIN CARD ── */}
         {loadingProfiles ? (
-          <div className="w-full flex flex-col items-center justify-center gap-5 py-16" style={{ height: "62vh", minHeight: "420px", width: "100%" }}>
-            <div className="w-full rounded-[32px] overflow-hidden border border-white/5 animate-pulse bg-[#0D1530]/50 flex flex-col items-center justify-center space-y-4" style={{ height: "100%", width: "100%" }}>
-              <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs text-muted font-semibold tracking-wider uppercase">Cargando perfiles...</p>
-            </div>
+          <div className="w-full pt-2">
+            <ProfileCardSkeleton />
           </div>
         ) : activeProfile ? (
           <div
@@ -417,7 +417,7 @@ export default function DashboardPage() {
               {/* Photo */}
               {activeProfile.imageUrl ? (
                 <img
-                  src={activeProfile.imageUrl}
+                  src={getOptimizedSupabaseImageUrl(activeProfile.imageUrl, 600, 800)}
                   alt={activeProfile.firstName}
                   className="absolute inset-0 w-full h-full object-cover"
                 />
@@ -441,7 +441,7 @@ export default function DashboardPage() {
                       e.stopPropagation();
                       const m = dbMatches.find(m => m.id === activeProfile.id);
                       if (m && m.conversationId) {
-                        window.location.href = `/${currentLang}/chat?conversationId=${m.conversationId}`;
+                        router.push(`/${currentLang}/chat?conversationId=${m.conversationId}`);
                       }
                     }}
                     className="px-3 py-1.5 bg-gradient-to-r from-[#D4A373] to-[#FF6B8B] text-background text-[10px] font-black rounded-full shadow-md flex items-center gap-1 hover:scale-105 active:scale-95 transition"
@@ -585,7 +585,7 @@ export default function DashboardPage() {
             <div className="w-full h-12 rounded-2xl bg-[#151F3C]/60 border border-white/5 flex items-center px-4 gap-3">
               {profiles[currentIndex + 1].imageUrl ? (
                 <img
-                  src={profiles[currentIndex + 1].imageUrl}
+                  src={getOptimizedSupabaseImageUrl(profiles[currentIndex + 1].imageUrl, 96, 96)}
                   alt=""
                   className="w-8 h-8 rounded-full object-cover border border-primary/20"
                 />
@@ -680,7 +680,7 @@ export default function DashboardPage() {
               <div className="w-6 h-6 bg-[#FF6B8B] rounded-full flex items-center justify-center text-white text-sm z-20 -mx-3 shadow-lg">♥</div>
               <div className="w-24 h-24 rounded-full border-4 border-[#FF6B8B] bg-[#151F3C] flex items-center justify-center overflow-hidden shadow-2xl shadow-secondary/30 z-10">
                 {matchedProfile.imageUrl ? (
-                  <img src={matchedProfile.imageUrl} alt={matchedProfile.firstName} className="w-full h-full object-cover" />
+                  <img src={getOptimizedSupabaseImageUrl(matchedProfile.imageUrl, 600, 800)} alt={matchedProfile.firstName} className="w-full h-full object-cover" />
                 ) : (
                   <svg viewBox="0 0 100 100" className="w-14 h-14 text-secondary/60">
                     <circle cx="50" cy="38" r="22" fill="currentColor" />
@@ -745,7 +745,7 @@ export default function DashboardPage() {
             {/* Header Image */}
             <div className="relative h-64 shrink-0">
               {activeProfile.imageUrl ? (
-                <img src={activeProfile.imageUrl} alt="" className="w-full h-full object-cover" />
+                <img src={getOptimizedSupabaseImageUrl(activeProfile.imageUrl, 600, 800)} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-[#151F3C] flex items-center justify-center text-primary font-bold text-5xl">👤</div>
               )}
